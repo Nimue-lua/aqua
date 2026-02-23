@@ -206,7 +206,7 @@ function FlexStrategy:grow(node, axis_idx)
 			-- Shrink: available_space < 0, distribute negative space to shrinkable children
 			local shrink_space = -available_space
 			if is_main_axis then
-				self:distributeFlexShrink(flex_items, shrink_space, total_shrink, axis_idx)
+				self:distributeFlexShrink(flex_items, shrink_space, axis_idx)
 			else
 				-- Shrink cross axis: clamp to available space
 				for _, child in ipairs(flex_items) do
@@ -278,34 +278,46 @@ function FlexStrategy:distributeFlexSpace(children, available_space, total_grow,
 end
 
 ---Distribute negative space (shrink) among flex items
+---Uses CSS Flexbox algorithm: scaled shrink factor = shrink * base_size
 ---@param children ui.Node[]
 ---@param shrink_space number positive value representing how much to shrink
----@param total_shrink number sum of shrink factors
 ---@param axis_idx ui.Axis
-function FlexStrategy:distributeFlexShrink(children, shrink_space, total_shrink, axis_idx)
-	if total_shrink <= 0 or #children == 0 then
+function FlexStrategy:distributeFlexShrink(children, shrink_space, axis_idx)
+	if #children == 0 then
 		return
 	end
 
 	local remaining_shrink = shrink_space
-	local current_total_shrink = total_shrink
 
 	table_util.clear(active_children)
 	for i = 1, #children do
 		active_children[i] = children[i]
 	end
 
-	-- Shrink proportional to shrink factor, respecting min_size
+	-- Shrink proportional to scaled shrink factor (shrink * base_size), respecting min_size
+	-- This matches CSS Flexbox behavior where elements shrink by similar percentages
 	-- Loop handles redistribution when children hit min_size
-	while #active_children > 0 and remaining_shrink > 0 and current_total_shrink > 0 do
+	while #active_children > 0 and remaining_shrink > 0 do
 		table_util.clear(next_active_children)
-		local next_total_shrink = 0
 		local any_capped = false
 		local shrink_to_distribute = remaining_shrink
 
+		-- Calculate total scaled weight (shrink * size)
+		local current_total_weight = 0
 		for _, child in ipairs(active_children) do
 			local child_axis = self:getAxis(child, axis_idx)
-			local shrink_factor = child.layout_box.shrink / current_total_shrink
+			current_total_weight = current_total_weight + (child.layout_box.shrink * child_axis.size)
+		end
+
+		if current_total_weight <= 0 then
+			break
+		end
+
+		-- Distribute negative space proportionally by scaled weight
+		for _, child in ipairs(active_children) do
+			local child_axis = self:getAxis(child, axis_idx)
+			local weight = child.layout_box.shrink * child_axis.size
+			local shrink_factor = weight / current_total_weight
 			local target_shrink = shrink_to_distribute * shrink_factor
 			local target_size = child_axis.size - target_shrink
 
@@ -317,7 +329,6 @@ function FlexStrategy:distributeFlexShrink(children, shrink_space, total_shrink,
 				any_capped = true
 			else
 				next_active_children[#next_active_children + 1] = child
-				next_total_shrink = next_total_shrink + child.layout_box.shrink
 			end
 		end
 
@@ -325,7 +336,8 @@ function FlexStrategy:distributeFlexShrink(children, shrink_space, total_shrink,
 			-- No children were capped, apply final shrink
 			for _, child in ipairs(active_children) do
 				local child_axis = self:getAxis(child, axis_idx)
-				local shrink_factor = child.layout_box.shrink / current_total_shrink
+				local weight = child.layout_box.shrink * child_axis.size
+				local shrink_factor = weight / current_total_weight
 				child_axis.size = child_axis.size - remaining_shrink * shrink_factor
 			end
 			remaining_shrink = 0
@@ -334,7 +346,6 @@ function FlexStrategy:distributeFlexShrink(children, shrink_space, total_shrink,
 
 		-- Swap active and next_active
 		next_active_children, active_children = active_children, next_active_children
-		current_total_shrink = next_total_shrink
 	end
 end
 

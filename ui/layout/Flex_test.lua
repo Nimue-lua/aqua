@@ -559,6 +559,45 @@ function test.shrink_factor_proportional(t)
 end
 
 ---@param t testing.T
+function test.shrink_scaled_by_size(t)
+	-- Test CSS Flexbox behavior: shrink is scaled by base size
+	-- This prevents small elements from collapsing when paired with large elements
+	local root = new_node()
+	root.layout_box:setWidth(990)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+
+	-- c1 is large (1000px), c2 is small (10px), both have shrink=1
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(1000)
+	c1.layout_box:setShrink(1)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setWidth(10)
+	c2.layout_box:setShrink(1)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Total width needed: 1000 + 10 = 1010
+	-- Available: 990
+	-- Shrink by: 20
+	-- 
+	-- CSS Flexbox uses scaled shrink factor (shrink * base_size):
+	-- weight_c1 = 1 * 1000 = 1000
+	-- weight_c2 = 1 * 10 = 10
+	-- total_weight = 1010
+	-- 
+	-- c1 shrinks by: 20 * (1000/1010) ≈ 19.8 -> 1000 - 19.8 = 980.2
+	-- c2 shrinks by: 20 * (10/1010) ≈ 0.2 -> 10 - 0.2 = 9.8
+	-- 
+	-- Both shrink by ~2% of their size (proportional)
+	-- Old buggy behavior would shrink both by 10px, collapsing c2 to 0px
+	t:aeq(c1.layout_box.x.size, 980.2, 0.1)
+	t:aeq(c2.layout_box.x.size, 9.8, 0.1)
+end
+
+---@param t testing.T
 function test.shrink_zero_no_shrink(t)
 	local root = new_node()
 	root.layout_box:setWidth(200)
