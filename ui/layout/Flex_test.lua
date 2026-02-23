@@ -400,6 +400,27 @@ function test.align_items_stretch_with_padding_and_margins(t)
 	t:eq(c1.layout_box.y.size, 70)
 end
 
+---@param t testing.T
+function test.align_items_stretch_zero_container_size(t)
+	-- Test that cross-axis stretch works even when container size is exactly 0
+	-- This was a bug: available_space ~= 0 check skipped stretch when size was 0
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(0) -- Container height is 0
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Stretch)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(50)
+	c1.layout_box:setHeightAuto() -- Should stretch to 0
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Child should be stretched to 0 (container height minus margins)
+	t:eq(c1.layout_box.y.size, 0, "child should stretch to 0 when container is 0")
+end
+
 -------------------------------------------------------------------------------
 -- JustifyContent with Padding Tests
 -------------------------------------------------------------------------------

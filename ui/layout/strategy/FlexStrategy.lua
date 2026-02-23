@@ -188,32 +188,21 @@ function FlexStrategy:grow(node, axis_idx)
 	end
 
 	-- PASS 3: Distribute space
-	if #flex_items > 0 and available_space ~= 0 then
-		if available_space > 0 then
-			if is_main_axis then
+	if #flex_items > 0 then
+		if is_main_axis then
+			-- Main axis: only distribute if there's space to distribute
+			if available_space > 0 then
 				self:distributeFlexSpace(flex_items, available_space, total_grow, axis_idx)
-			else
-				-- Stretch cross axis
-				for _, child in ipairs(flex_items) do
-					local child_axis = self:getAxis(child, axis_idx)
-					-- Subtract margins from available space when stretching
-					local stretched_size = available_space - child_axis:getTotalMargin()
-					local new_size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
-					child_axis.size = new_size
-				end
+			elseif available_space < 0 then
+				self:distributeFlexShrink(flex_items, -available_space, axis_idx)
 			end
 		else
-			-- Shrink: available_space < 0, distribute negative space to shrinkable children
-			local shrink_space = -available_space
-			if is_main_axis then
-				self:distributeFlexShrink(flex_items, shrink_space, axis_idx)
-			else
-				-- Shrink cross axis: clamp to available space
-				for _, child in ipairs(flex_items) do
-					local child_axis = self:getAxis(child, axis_idx)
-					local new_size = math_clamp(-shrink_space, child_axis.min_size, child_axis.size)
-					child_axis.size = new_size
-				end
+			-- Cross axis: always stretch, even if available_space is 0
+			for _, child in ipairs(flex_items) do
+				local child_axis = self:getAxis(child, axis_idx)
+				-- Subtract margins from available space when stretching
+				local stretched_size = available_space - child_axis:getTotalMargin()
+				child_axis.size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
 			end
 		end
 	end
