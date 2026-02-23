@@ -2,6 +2,8 @@ local pkg = require("aqua.pkg")
 pkg.import_love()
 pkg.export_lua()
 
+require("pprint").export()
+
 local synctable = require("synctable")
 local table_util = require("table_util")
 local stbl = require("stbl")

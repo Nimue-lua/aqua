@@ -2,6 +2,8 @@ local pkg = require("aqua.pkg")
 pkg.import_love()
 pkg.export_lua()
 
+require("pprint").export()
+
 local stbl = require("stbl")
 local Remote = require("icc.Remote")
 local TaskHandler = require("icc.TaskHandler")
@@ -47,8 +49,10 @@ end
 
 require("love.timer")
 
+local running = true
 local function handle(event)
 	if event.name == "stop" then
+		running = false
 		return
 	elseif event.name == "loadstring" then
 		local f = assert(loadstring(event.codestring))
@@ -62,7 +66,7 @@ local function handle(event)
 	end
 end
 
-while true do
+while running do
 	local event = input_channel:demand()
 
 	if event then
