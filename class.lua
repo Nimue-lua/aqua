@@ -1,3 +1,7 @@
+
+---@param t table
+---@param ... any
+---@return any
 local function return_from_new(t, ...)
 	if select("#", ...) > 0 then
 		return ...
@@ -5,28 +9,26 @@ local function return_from_new(t, ...)
 	return t
 end
 
-local function return_from_new_xpcall(t, ok, ...)
-	if ok then
-		return return_from_new(t, ...)
-	end
-	error(..., 2)
-end
-
+---@param T {new: function?}
+---@param ... any
+---@return table
 local function new(T, ...)
-	if not T.new then
+	local T_new = T.new
+	if not T_new then
 		local t = ... or {}
 		assert(type(t) == "table" and not getmetatable(t), "bad argument to default constructor")
 		return setmetatable(t, T)
 	end
+
 	local t = setmetatable({}, T)
-	return return_from_new_xpcall(t, xpcall(T.new, debug.traceback, t, ...))
+	return return_from_new(t, T_new(t, ...))
 end
 
 ---@param T table
 ---@return boolean
 local function is_class(T)
 	local mt = getmetatable(T)
-	return not not (mt and mt.__call)
+	return not not (mt and mt.__is_class)
 end
 
 ---@param t table
@@ -36,32 +38,31 @@ local function is_instance(t)
 	return is_class(T)
 end
 
+---@param T table
+---@param _T table
+---@return boolean
 local function type_of_class(T, _T)
-	if not _T or not is_class(_T) then
+	local mt = getmetatable(_T)
+	if not mt or not mt.__is_class then
 		return false
 	end
-	if _T == T then
-		return true
-	end
-
-	local mt = getmetatable(_T)
-	if not mt.__indexes then
-		return type_of_class(T, mt.__index)
-	end
-
-	---@type table, table
-	local p, t = unpack(mt.__indexes)
-	return type_of_class(T, p) or type_of_class(T, t)
+	return mt.__parents[T] or false
 end
 
+---@param T table
+---@param t table
+---@return boolean
 local function type_of_instance(T, t)
-	if not is_instance(t) then
+	local _T = getmetatable(t)
+	if not _T then
 		return false
 	end
-	local _T = getmetatable(t)
 	return type_of_class(T, _T)
 end
 
+---@param p table
+---@param t table?
+---@return table
 local function class(p, t)
 	if p then
 		assert(is_class(p), "bad argument #1 to 'class'")
@@ -72,16 +73,31 @@ local function class(p, t)
 		__add = class,
 		__mul = type_of_instance,
 		__div = type_of_class,
+		__is_class = true,
 	}
 
 	local T = {}
 	T.__index = T
 	T.__name = debug.getinfo(2, "S").source
 
+	---@type {[table]: true?}
+	local parents = {[T] = true}
+	if p then
+		for parent in pairs(getmetatable(p).__parents) do
+			parents[parent] = true
+		end
+	end
+
 	if not is_class(t) then
 		mt.__index = p
+		mt.__parents = parents
 		return setmetatable(T, mt)
 	end
+
+	for parent in pairs(getmetatable(t).__parents) do
+		parents[parent] = true
+	end
+	mt.__parents = parents
 
 	mt.__indexes = {p, t}
 	function mt.__index(_, k)
@@ -156,7 +172,9 @@ local M = {
 	is_instance = is_instance,
 }
 
-setmetatable(M, {__call = class})
+setmetatable(M, {__call = function(_, p, t)
+	return class(p, t)
+end})
 
 ---@cast M +fun(p: table?, t: table?): table
 
