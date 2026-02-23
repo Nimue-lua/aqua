@@ -122,11 +122,11 @@ end
 ---@param node ui.Node
 function AbsoluteStrategy:arrange(node)
 	for _, child in ipairs(node.children) do
-		-- Apply margins to position
 		local child_x = child.layout_box.x
 		local child_y = child.layout_box.y
-		child_x.pos = child_x.pos + child_x.margin_start
-		child_y.pos = child_y.pos + child_y.margin_start
+		-- Use left/top as configured position, compute pos with margins
+		child_x.pos = child.layout_box.left + child_x.margin_start
+		child_y.pos = child.layout_box.top + child_y.margin_start
 
 		self:arrangeChild(child)
 	end

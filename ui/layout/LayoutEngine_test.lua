@@ -458,8 +458,8 @@ function test.mixed_strategies_tree(t)
 	local flex_container = root:add(new_node())
 	flex_container.layout_box:setDimensions(200, 200)
 	flex_container.layout_box.arrange = LayoutBox.Arrange.FlexRow
-	flex_container.layout_box.x.pos = 10
-	flex_container.layout_box.y.pos = 20
+	flex_container.layout_box.left = 10
+	flex_container.layout_box.top = 20
 
 	-- Item in flex container
 	local item1 = flex_container:add(new_node())

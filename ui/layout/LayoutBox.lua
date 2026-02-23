@@ -38,6 +38,10 @@ function LayoutBox:new()
 	self.x = LayoutAxis()
 	self.y = LayoutAxis()
 
+	-- User-configured position (input to layout engine)
+	self.left = 0
+	self.top = 0
+
 	self.grow = 0
 	self.shrink = 1
 	self.child_gap = 0
@@ -92,14 +96,6 @@ end
 ---@return number, number
 function LayoutBox:getLayoutDimensions()
 	return self:getLayoutWidth(), self:getLayoutHeight()
-end
-
----@param x number
----@param y number
-function LayoutBox:setPosition(x, y)
-	self.x.pos = x
-	self.y.pos = y
-	self:markDirty(Axis.Both)
 end
 
 ---@param reversed boolean
