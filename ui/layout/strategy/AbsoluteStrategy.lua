@@ -32,7 +32,7 @@ function AbsoluteStrategy:measure(node, axis_idx)
 		axis.size = math_clamp(s, min_s, max_s)
 
 		for _, child in ipairs(node.children) do
-			self:measure(child, axis_idx)
+			self.engine:measure(child, axis_idx)
 		end
 		return
 	end
@@ -50,7 +50,7 @@ function AbsoluteStrategy:measure(node, axis_idx)
 		s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
 	else
 		for _, child in ipairs(node.children) do
-			self:measure(child, axis_idx)
+			self.engine:measure(child, axis_idx)
 			local child_axis = self:getAxis(child, axis_idx)
 			-- Include child position + size + margins
 			s = math_max(s, child_axis.pos + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
@@ -99,7 +99,7 @@ function AbsoluteStrategy:grow(node, axis_idx)
 
 	-- Recurse into children
 	for _, child in ipairs(node.children) do
-		self:grow(child, axis_idx)
+		self.engine:grow(child, axis_idx)
 	end
 end
 

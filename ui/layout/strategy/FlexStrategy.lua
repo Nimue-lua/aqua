@@ -50,7 +50,7 @@ function FlexStrategy:measure(node, axis_idx)
 		axis.size = math_clamp(s, min_s, max_s)
 
 		for _, child in ipairs(node.children) do
-			self:measure(child, axis_idx)
+			self.engine:measure(child, axis_idx)
 		end
 		return
 	end
@@ -72,7 +72,7 @@ function FlexStrategy:measure(node, axis_idx)
 		if is_main_axis then
 			-- Main axis: sum of children + gaps
 			for _, child in ipairs(node.children) do
-				self:measure(child, axis_idx)
+				self.engine:measure(child, axis_idx)
 				local child_axis = self:getAxis(child, axis_idx)
 				s = s + child_axis.size + child_axis:getTotalMargin()
 				child_count = child_count + 1
@@ -81,7 +81,7 @@ function FlexStrategy:measure(node, axis_idx)
 		else
 			-- Cross axis: max of children
 			for _, child in ipairs(node.children) do
-				self:measure(child, axis_idx)
+				self.engine:measure(child, axis_idx)
 				local child_axis = self:getAxis(child, axis_idx)
 				s = math_max(s, child_axis.size + child_axis:getTotalMargin())
 			end
@@ -148,7 +148,9 @@ function FlexStrategy:grow(node, axis_idx)
 			-- Stretch cross axis
 			for _, child in ipairs(growables) do
 				local child_axis = self:getAxis(child, axis_idx)
-				local new_size = math_clamp(available_space, child_axis.min_size, child_axis.max_size)
+				-- Subtract margins from available space when stretching
+				local stretched_size = available_space - child_axis:getTotalMargin()
+				local new_size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
 				child_axis.size = new_size
 			end
 		end
@@ -156,7 +158,7 @@ function FlexStrategy:grow(node, axis_idx)
 
 	-- Recurse into children
 	for _, child in ipairs(node.children) do
-		self:grow(child, axis_idx)
+		self.engine:grow(child, axis_idx)
 	end
 end
 
@@ -279,9 +281,9 @@ function FlexStrategy:arrange(node)
 		local cross_pos = cross_axis.padding_start + child_cross.margin_start
 
 		if child_align == AlignItems.End then
-			cross_pos = available_cross - child_cross.size - child_cross.margin_end
+			cross_pos = cross_axis.padding_start + available_cross - child_cross.size - child_cross.margin_end
 		elseif child_align == AlignItems.Center then
-			cross_pos = (available_cross - child_cross.size - child_cross:getTotalMargin()) / 2 + child_cross.margin_start
+			cross_pos = cross_axis.padding_start + (available_cross - child_cross.size - child_cross:getTotalMargin()) / 2 + child_cross.margin_start
 		end
 
 		child_cross.pos = cross_pos
