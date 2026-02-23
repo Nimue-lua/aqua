@@ -285,15 +285,22 @@ function test.intrinsic_size_flex_col(t)
 	container.layout_box.arrange = LayoutBox.Arrange.FlexCol
 
 	-- Node with intrinsic size (e.g., texture 64x48)
-	local intrinsic_node = container:add(new_node_with_intrinsic_size(64, 48))
-	intrinsic_node.layout_box:setWidthAuto()
-	intrinsic_node.layout_box:setHeightAuto()
+	local n1 = container:add(new_node_with_intrinsic_size(64, 48))
+	local n2 = container:add(new_node_with_intrinsic_size(64, 48))
+	n1.layout_box:setWidthAuto()
+	n1.layout_box:setHeightAuto()
+	n2.layout_box:setWidthAuto()
+	n2.layout_box:setHeightAuto()
 
 	engine:updateLayout(container.children)
 
 	-- Should use intrinsic size
-	t:eq(intrinsic_node.layout_box.x.size, 64)
-	t:eq(intrinsic_node.layout_box.y.size, 48)
+	t:eq(n1.layout_box.x.size, 64)
+	t:eq(n1.layout_box.y.size, 48)
+	t:eq(n2.layout_box.x.size, 64)
+	t:eq(n2.layout_box.y.size, 48)
+	t:eq(container.layout_box.x.size, 64)
+	t:eq(container.layout_box.y.size, 96)
 end
 
 ---@param t testing.T

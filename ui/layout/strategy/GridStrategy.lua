@@ -124,7 +124,7 @@ function GridStrategy:measure(node, axis_idx)
 		axis.size = math_clamp(s, min_s, max_s)
 
 		for _, child in ipairs(node.children) do
-			self:measure(child, axis_idx)
+			self.engine:measure(child, axis_idx)
 		end
 		return
 	end
@@ -224,7 +224,7 @@ function GridStrategy:grow(node, axis_idx)
 	-- Grid doesn't use grow, but children might
 	for _, child in ipairs(node.children) do
 		-- Recurse - children might have their own layout modes
-		self:grow(child, axis_idx)
+		self.engine:grow(child, axis_idx)
 	end
 end
 

@@ -50,7 +50,7 @@ function FlexStrategy:measure(node, axis_idx)
 		axis.size = math_clamp(s, min_s, max_s)
 
 		for _, child in ipairs(node.children) do
-			self:measure(child, axis_idx)
+			self.engine:measure(child, axis_idx)
 		end
 		return
 	end
@@ -72,7 +72,7 @@ function FlexStrategy:measure(node, axis_idx)
 		if is_main_axis then
 			-- Main axis: sum of children + gaps
 			for _, child in ipairs(node.children) do
-				self:measure(child, axis_idx)
+				self.engine:measure(child, axis_idx)
 				local child_axis = self:getAxis(child, axis_idx)
 				s = s + child_axis.size + child_axis:getTotalMargin()
 				child_count = child_count + 1
@@ -81,7 +81,7 @@ function FlexStrategy:measure(node, axis_idx)
 		else
 			-- Cross axis: max of children
 			for _, child in ipairs(node.children) do
-				self:measure(child, axis_idx)
+				self.engine:measure(child, axis_idx)
 				local child_axis = self:getAxis(child, axis_idx)
 				s = math_max(s, child_axis.size + child_axis:getTotalMargin())
 			end
@@ -156,7 +156,7 @@ function FlexStrategy:grow(node, axis_idx)
 
 	-- Recurse into children
 	for _, child in ipairs(node.children) do
-		self:grow(child, axis_idx)
+		self.engine:grow(child, axis_idx)
 	end
 end
 
