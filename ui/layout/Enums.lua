@@ -13,7 +13,6 @@ Enums.Arrange = {
 	Absolute = 1,
 	FlexRow = 2,
 	FlexCol = 3,
-	Grid = 4,
 }
 
 ---@enum ui.Axis
