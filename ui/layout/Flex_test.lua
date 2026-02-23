@@ -639,4 +639,42 @@ function test.shrink_nested_flex_container(t)
 	t:eq(grandchild.layout_box.x.size, 140)
 end
 
+-------------------------------------------------------------------------------
+-- Gap with Percent Children Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.gap_with_percent_children(t)
+	-- Test that gap is calculated correctly when mixing Percent and non-Percent children
+	-- This tests the fix for double gap calculation bug
+	local root = new_node()
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setWidthAuto()
+	root.layout_box:setHeight(100)
+	root.layout_box.child_gap = 10
+
+	-- Two fixed-width children
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setDimensions(50, 50)
+
+	-- One percent-width child
+	local c3 = root:add(new_node())
+	c3.layout_box:setWidthPercent(0.5) -- 50% of container
+	c3.layout_box:setHeight(50)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Expected calculation:
+	-- First pass: c1=50, c2=50, s=100, child_count=2
+	-- Preliminary container size = 100 (for percent child to reference)
+	-- Second pass: c3 = 50% of 100 = 50, s=150, child_count=3
+	-- Gap: 10 * (3-1) = 20
+	-- Final: 150 + 20 = 170
+	t:eq(root.layout_box.x.size, 170, "container width with gap and percent child")
+end
+
 return test

@@ -71,19 +71,53 @@ function FlexStrategy:measure(node, axis_idx)
 	else
 		if is_main_axis then
 			-- Main axis: sum of children + gaps
+			-- First pass: measure non-Percent children
 			for _, child in ipairs(node.children) do
-				self.engine:measure(child, axis_idx)
 				local child_axis = self:getAxis(child, axis_idx)
-				s = s + child_axis.size + child_axis:getTotalMargin()
-				child_count = child_count + 1
+				if child_axis.mode ~= SizeMode.Percent then
+					self.engine:measure(child, axis_idx)
+					s = s + child_axis.size + child_axis:getTotalMargin()
+					child_count = child_count + 1
+				end
 			end
+
+			-- Set preliminary size for Percent children to reference
+			local base_size = axis.padding_start + s + axis.padding_end
+			axis.size = math_clamp(base_size, min_s, max_s)
+
+			-- Second pass: measure Percent children
+			for _, child in ipairs(node.children) do
+				local child_axis = self:getAxis(child, axis_idx)
+				if child_axis.mode == SizeMode.Percent then
+					self.engine:measure(child, axis_idx)
+					s = s + child_axis.size + child_axis:getTotalMargin()
+					child_count = child_count + 1
+				end
+			end
+			-- Calculate gap once at the end, after all children are counted
 			s = s + layout_box.child_gap * math_max(0, child_count - 1)
 		else
 			-- Cross axis: max of children
+			-- First pass: measure non-Percent children
 			for _, child in ipairs(node.children) do
-				self.engine:measure(child, axis_idx)
 				local child_axis = self:getAxis(child, axis_idx)
-				s = math_max(s, child_axis.size + child_axis:getTotalMargin())
+				if child_axis.mode ~= SizeMode.Percent then
+					self.engine:measure(child, axis_idx)
+					s = math_max(s, child_axis.size + child_axis:getTotalMargin()) ---@type number
+				end
+			end
+
+			-- Set preliminary size for Percent children to reference
+			local base_size = axis.padding_start + s + axis.padding_end
+			axis.size = math_clamp(base_size, min_s, max_s)
+
+			-- Second pass: measure Percent children
+			for _, child in ipairs(node.children) do
+				local child_axis = self:getAxis(child, axis_idx)
+				if child_axis.mode == SizeMode.Percent then
+					self.engine:measure(child, axis_idx)
+					s = math_max(s, child_axis.size + child_axis:getTotalMargin())
+				end
 			end
 		end
 	end

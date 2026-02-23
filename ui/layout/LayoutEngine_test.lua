@@ -387,6 +387,58 @@ function test.intrinsic_size_mixed_with_fixed(t)
 end
 
 ---@param t testing.T
+function test.percent_child_with_changing_intrinsic_size(t)
+	-- Test that parent with Auto height correctly shrinks when intrinsic child shrinks
+	-- This tests the fix for the bug where Percent children used stale parent size
+	-- Root (FlexRow, 100% width)
+	--   └── container (Absolute, Auto height)
+	--         ├── percent_child (100% height - should follow container)
+	--         └── intrinsic_child (Auto - determines container size)
+	local engine = LayoutEngine()
+
+	-- Root with fixed dimensions
+	local root = new_node()
+	root.layout_box:setDimensions(200, 200)
+	root.layout_box.arrange = LayoutBox.Arrange.FlexRow
+
+	-- Container with Auto height
+	local container = root:add(new_node())
+	container.layout_box:setWidth(100)
+	container.layout_box:setHeightAuto()
+	container.layout_box.arrange = LayoutBox.Arrange.Absolute
+
+	-- Percent height child
+	local percent_child = container:add(new_node())
+	percent_child.layout_box:setWidth(50)
+	percent_child.layout_box:setHeightPercent(1.0) -- 100% of parent
+
+	-- Intrinsic size child that determines container height
+	local intrinsic_child = container:add(new_node_with_intrinsic_size(50, 100))
+	intrinsic_child.layout_box:setWidth(50)
+	intrinsic_child.layout_box:setHeightAuto()
+
+	-- First layout: intrinsic child has height 100
+	engine:updateLayout(container.children)
+	t:eq(container.layout_box.y.size, 100, "container height should be 100 from intrinsic child")
+	t:eq(percent_child.layout_box.y.size, 100, "percent child should be 100% of 100")
+
+	-- Simulate intrinsic child shrinking (like text unwrapping)
+	intrinsic_child.getIntrinsicSize = function(self, axis_idx, constraint)
+		if axis_idx == Axis.X then
+			return 50
+		else
+			return 32 -- Height shrunk from 100 to 32
+		end
+	end
+	intrinsic_child.layout_box:markDirty(Axis.Both)
+
+	-- Second layout: intrinsic child now has height 32
+	engine:updateLayout(container.children)
+	t:eq(container.layout_box.y.size, 32, "container height should shrink to 32")
+	t:eq(percent_child.layout_box.y.size, 32, "percent child should be 100% of 32")
+end
+
+---@param t testing.T
 function test.mixed_strategies_tree(t)
 	-- Test a tree with multiple layout strategies at different levels
 	-- Root (Absolute)
