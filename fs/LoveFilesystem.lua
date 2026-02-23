@@ -51,10 +51,4 @@ function LoveFilesystem:remove(name)
 	return love.filesystem.remove(name)
 end
 
----@param name string
----@return boolean
-function LoveFilesystem:createDirectory(name)
-	return love.filesystem.createDirectory(name)
-end
-
 return LoveFilesystem
