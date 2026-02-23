@@ -145,4 +145,329 @@ function test.align_items_stretch(t)
 	t:eq(c3.layout_box.y.size, 30) -- Fit should not stretch
 end
 
+-------------------------------------------------------------------------------
+-- Padding Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.flex_row_padding_positions(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setPaddings({10, 20, 10, 20}) -- top, right, bottom, left
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setDimensions(50, 50)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Children should be positioned with padding offset
+	t:eq(c1.layout_box.x.pos, 20) -- left padding
+	t:eq(c1.layout_box.y.pos, 10) -- top padding
+	t:eq(c2.layout_box.x.pos, 70) -- 20 + 50
+	t:eq(c2.layout_box.y.pos, 10)
+end
+
+---@param t testing.T
+function test.flex_row_padding_container_size(t)
+	local root = new_node()
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setWidthAuto()
+	root.layout_box:setHeightAuto()
+	root.layout_box:setPaddings({10, 20, 10, 20}) -- top, right, bottom, left
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setDimensions(50, 50)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Container size should include padding
+	-- width = left + children + right = 20 + 50 + 50 + 20 = 140
+	-- height = top + child + bottom = 10 + 50 + 10 = 70
+	t:eq(root.layout_box.x.size, 140)
+	t:eq(root.layout_box.y.size, 70)
+end
+
+---@param t testing.T
+function test.flex_col_padding_positions(t)
+	local root = new_node()
+	root.layout_box:setWidth(100)
+	root.layout_box:setHeight(200)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexCol)
+	root.layout_box:setPaddings({10, 20, 10, 20}) -- top, right, bottom, left
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setDimensions(50, 50)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Children should be positioned with padding offset in column direction
+	t:eq(c1.layout_box.x.pos, 20) -- left padding
+	t:eq(c1.layout_box.y.pos, 10) -- top padding
+	t:eq(c2.layout_box.x.pos, 20)
+	t:eq(c2.layout_box.y.pos, 60) -- 10 + 50
+end
+
+-------------------------------------------------------------------------------
+-- Margin Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.flex_row_child_margins(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+	c1.layout_box:setMargins({10, 20, 10, 20}) -- top, right, bottom, left
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Child position should include margin offset
+	t:eq(c1.layout_box.x.pos, 20) -- left margin
+	t:eq(c1.layout_box.y.pos, 10) -- top margin
+end
+
+---@param t testing.T
+function test.flex_row_margins_affect_container_size(t)
+	local root = new_node()
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setWidthAuto()
+	root.layout_box:setHeightAuto()
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+	c1.layout_box:setMargins({10, 20, 10, 20}) -- top, right, bottom, left
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Container size should include child margins
+	-- width = child + left_margin + right_margin = 50 + 20 + 20 = 90
+	-- height = child + top_margin + bottom_margin = 50 + 10 + 10 = 70
+	t:eq(root.layout_box.x.size, 90)
+	t:eq(root.layout_box.y.size, 70)
+end
+
+-------------------------------------------------------------------------------
+-- AlignItems with Padding and Margins Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.align_items_end_with_padding(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setPaddings({10, 20, 10, 20}) -- top, right, bottom, left
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.End)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 30)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Child should be positioned at bottom of content area
+	-- Available height = 100 - 10 (top padding) - 10 (bottom padding) = 80
+	-- y.pos = top_padding + available_height - child_height = 10 + 80 - 30 = 60
+	t:eq(c1.layout_box.y.pos, 60)
+end
+
+---@param t testing.T
+function test.align_items_center_with_padding(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setPaddings({10, 20, 10, 20}) -- top, right, bottom, left
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Center)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 30)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Child should be centered in content area
+	-- Available height = 100 - 10 - 10 = 80
+	-- y.pos = top_padding + (available_height - child_height) / 2 = 10 + (80 - 30) / 2 = 35
+	t:eq(c1.layout_box.y.pos, 35)
+end
+
+---@param t testing.T
+function test.align_items_end_with_margins(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.End)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 30)
+	c1.layout_box:setMargins({5, 10, 5, 10}) -- top, right, bottom, left
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Child should be positioned at end accounting for margins
+	-- y.pos = container_height - child_height - margin_bottom = 100 - 30 - 5 = 65
+	t:eq(c1.layout_box.y.pos, 65)
+end
+
+---@param t testing.T
+function test.align_items_center_with_margins(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Center)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 30)
+	c1.layout_box:setMargins({5, 10, 5, 10}) -- top, right, bottom, left
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Child should be centered accounting for margins
+	-- Available height = 100
+	-- Space needed = child_height + margin_top + margin_bottom = 30 + 5 + 5 = 40
+	-- y.pos = (available - space_needed) / 2 + margin_top = (100 - 40) / 2 + 5 = 35
+	t:eq(c1.layout_box.y.pos, 35)
+end
+
+-------------------------------------------------------------------------------
+-- AlignItems.Stretch with Margins Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.align_items_stretch_with_margins(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Stretch)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(50)
+	c1.layout_box:setHeightAuto()
+	c1.layout_box:setMargins({10, 0, 10, 0}) -- top, right, bottom, left (only top/bottom)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Child should stretch to fill available space minus margins
+	-- stretched_size = container_height - margin_top - margin_bottom = 100 - 10 - 10 = 80
+	t:eq(c1.layout_box.y.size, 80)
+end
+
+---@param t testing.T
+function test.align_items_stretch_with_padding_and_margins(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setPaddings({10, 10, 10, 10}) -- top, right, bottom, left
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Stretch)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(50)
+	c1.layout_box:setHeightAuto()
+	c1.layout_box:setMargins({5, 0, 5, 0}) -- top, right, bottom, left
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Available height = 100 - 10 - 10 = 80 (container minus padding)
+	-- Stretched size = 80 - 5 - 5 = 70 (available minus margins)
+	t:eq(c1.layout_box.y.size, 70)
+end
+
+-------------------------------------------------------------------------------
+-- JustifyContent with Padding Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.justify_content_center_with_padding(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setPaddings({0, 20, 0, 20}) -- top, right, bottom, left
+	root.layout_box:setJustifyContent(LayoutBox.JustifyContent.Center)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Available width = 200 - 20 - 20 = 160
+	-- x.pos = left_padding + (available_width - child_width) / 2 = 20 + (160 - 50) / 2 = 75
+	t:eq(c1.layout_box.x.pos, 75)
+end
+
+---@param t testing.T
+function test.justify_content_end_with_padding(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setPaddings({0, 20, 0, 20}) -- top, right, bottom, left
+	root.layout_box:setJustifyContent(LayoutBox.JustifyContent.End)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- x.pos = container_width - right_padding - child_width = 200 - 20 - 50 = 130
+	t:eq(c1.layout_box.x.pos, 130)
+end
+
+---@param t testing.T
+function test.justify_content_space_between_with_padding(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setPaddings({0, 20, 0, 20}) -- top, right, bottom, left
+	root.layout_box:setJustifyContent(LayoutBox.JustifyContent.SpaceBetween)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setDimensions(50, 50)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Available width = 200 - 20 - 20 = 160
+	-- Total children width = 50 + 50 = 100
+	-- Gap = (160 - 100) / (2 - 1) = 60
+	-- c1.x.pos = left_padding = 20
+	-- c2.x.pos = 20 + 50 + 60 = 130
+	t:eq(c1.layout_box.x.pos, 20)
+	t:eq(c2.layout_box.x.pos, 130)
+end
+
 return test

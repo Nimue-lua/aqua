@@ -148,7 +148,9 @@ function FlexStrategy:grow(node, axis_idx)
 			-- Stretch cross axis
 			for _, child in ipairs(growables) do
 				local child_axis = self:getAxis(child, axis_idx)
-				local new_size = math_clamp(available_space, child_axis.min_size, child_axis.max_size)
+				-- Subtract margins from available space when stretching
+				local stretched_size = available_space - child_axis:getTotalMargin()
+				local new_size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
 				child_axis.size = new_size
 			end
 		end
@@ -279,9 +281,9 @@ function FlexStrategy:arrange(node)
 		local cross_pos = cross_axis.padding_start + child_cross.margin_start
 
 		if child_align == AlignItems.End then
-			cross_pos = available_cross - child_cross.size - child_cross.margin_end
+			cross_pos = cross_axis.padding_start + available_cross - child_cross.size - child_cross.margin_end
 		elseif child_align == AlignItems.Center then
-			cross_pos = (available_cross - child_cross.size - child_cross:getTotalMargin()) / 2 + child_cross.margin_start
+			cross_pos = cross_axis.padding_start + (available_cross - child_cross.size - child_cross:getTotalMargin()) / 2 + child_cross.margin_start
 		end
 
 		child_cross.pos = cross_pos
