@@ -2,6 +2,8 @@ local pkg = require("aqua.pkg")
 pkg.import_love()
 pkg.export_lua()
 
+require("pprint").export()
+
 local stbl = require("stbl")
 local Remote = require("icc.Remote")
 local TaskHandler = require("icc.TaskHandler")
