@@ -7,6 +7,7 @@ local Enums = require("ui.layout.Enums")
 ---@field x ui.LayoutAxis
 ---@field y ui.LayoutAxis
 ---@field grow number
+---@field shrink number
 ---@field child_gap number
 ---@field arrange ui.Arrange
 ---@field justify_content ui.JustifyContent
@@ -38,6 +39,7 @@ function LayoutBox:new()
 	self.y = LayoutAxis()
 
 	self.grow = 0
+	self.shrink = 1
 	self.child_gap = 0
 	self.reversed = false
 	self.arrange = Arrange.Absolute
@@ -206,6 +208,15 @@ function LayoutBox:setGrow(grow)
 		return
 	end
 	self.grow = grow
+	self:markDirty(Axis.Both)
+end
+
+---@param shrink number
+function LayoutBox:setShrink(shrink)
+	if self.shrink == shrink then
+		return
+	end
+	self.shrink = shrink
 	self:markDirty(Axis.Both)
 end
 

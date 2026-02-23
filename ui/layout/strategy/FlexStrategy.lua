@@ -16,7 +16,7 @@ local math_max = math.max
 local FlexStrategy = LayoutStrategy + {}
 
 -- Reusable tables for GC optimization
-local growables = {} ---@type ui.Node[]
+local flex_items = {} ---@type ui.Node[]
 local active_children = {} ---@type ui.Node[]
 local next_active_children = {} ---@type ui.Node[]
 
@@ -104,12 +104,14 @@ function FlexStrategy:grow(node, axis_idx)
 	local axis = self:getAxis(node, axis_idx)
 	local is_main_axis = isMainAxis(layout_box, axis_idx)
 
-	table_util.clear(growables)
+	table_util.clear(flex_items)
 
 	local available_space = axis:getLayoutSize()
 	local total_grow = 0
+	local total_shrink = 0
 	local child_count = 0
 
+	-- PASS 1: Calculate available_space and handle percent sizing
 	for _, child in ipairs(node.children) do
 		local child_axis = self:getAxis(child, axis_idx)
 		child_count = child_count + 1
@@ -123,17 +125,6 @@ function FlexStrategy:grow(node, axis_idx)
 
 		if is_main_axis then
 			available_space = available_space - child_axis.size - child_axis:getTotalMargin()
-
-			if child.layout_box.grow > 0 then
-				table.insert(growables, child)
-				total_grow = total_grow + child.layout_box.grow
-			end
-		else
-			-- Cross axis: stretch alignment
-			local align = child.layout_box.align_self or layout_box.align_items
-			if align == AlignItems.Stretch and child_axis.mode == SizeMode.Auto then
-				table.insert(growables, child)
-			end
 		end
 	end
 
@@ -141,17 +132,54 @@ function FlexStrategy:grow(node, axis_idx)
 		available_space = available_space - layout_box.child_gap * math_max(0, child_count - 1)
 	end
 
-	if #growables > 0 and available_space > 0 then
+	-- PASS 2: Collect flex items based on whether we're growing or shrinking
+	for _, child in ipairs(node.children) do
+		local child_axis = self:getAxis(child, axis_idx)
+
 		if is_main_axis then
-			self:distributeFlexSpace(growables, available_space, total_grow, axis_idx)
+			if available_space > 0 and child.layout_box.grow > 0 then
+				table.insert(flex_items, child)
+				total_grow = total_grow + child.layout_box.grow
+			elseif available_space < 0 and child.layout_box.shrink > 0 then
+				table.insert(flex_items, child)
+				total_shrink = total_shrink + child.layout_box.shrink
+			end
 		else
-			-- Stretch cross axis
-			for _, child in ipairs(growables) do
-				local child_axis = self:getAxis(child, axis_idx)
-				-- Subtract margins from available space when stretching
-				local stretched_size = available_space - child_axis:getTotalMargin()
-				local new_size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
-				child_axis.size = new_size
+			-- Cross axis: stretch alignment
+			local align = child.layout_box.align_self or layout_box.align_items
+			if align == AlignItems.Stretch and child_axis.mode == SizeMode.Auto then
+				table.insert(flex_items, child)
+			end
+		end
+	end
+
+	-- PASS 3: Distribute space
+	if #flex_items > 0 and available_space ~= 0 then
+		if available_space > 0 then
+			if is_main_axis then
+				self:distributeFlexSpace(flex_items, available_space, total_grow, axis_idx)
+			else
+				-- Stretch cross axis
+				for _, child in ipairs(flex_items) do
+					local child_axis = self:getAxis(child, axis_idx)
+					-- Subtract margins from available space when stretching
+					local stretched_size = available_space - child_axis:getTotalMargin()
+					local new_size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
+					child_axis.size = new_size
+				end
+			end
+		else
+			-- Shrink: available_space < 0, distribute negative space to shrinkable children
+			local shrink_space = -available_space
+			if is_main_axis then
+				self:distributeFlexShrink(flex_items, shrink_space, total_shrink, axis_idx)
+			else
+				-- Shrink cross axis: clamp to available space
+				for _, child in ipairs(flex_items) do
+					local child_axis = self:getAxis(child, axis_idx)
+					local new_size = math_clamp(-shrink_space, child_axis.min_size, child_axis.size)
+					child_axis.size = new_size
+				end
 			end
 		end
 	end
@@ -212,6 +240,67 @@ function FlexStrategy:distributeFlexSpace(children, available_space, total_grow,
 		-- Swap active and next_active
 		next_active_children, active_children = active_children, next_active_children
 		current_total_grow = next_total_grow
+	end
+end
+
+---Distribute negative space (shrink) among flex items
+---@param children ui.Node[]
+---@param shrink_space number positive value representing how much to shrink
+---@param total_shrink number sum of shrink factors
+---@param axis_idx ui.Axis
+function FlexStrategy:distributeFlexShrink(children, shrink_space, total_shrink, axis_idx)
+	if total_shrink <= 0 or #children == 0 then
+		return
+	end
+
+	local remaining_shrink = shrink_space
+	local current_total_shrink = total_shrink
+
+	table_util.clear(active_children)
+	for i = 1, #children do
+		active_children[i] = children[i]
+	end
+
+	-- Shrink proportional to shrink factor, respecting min_size
+	-- Loop handles redistribution when children hit min_size
+	while #active_children > 0 and remaining_shrink > 0 and current_total_shrink > 0 do
+		table_util.clear(next_active_children)
+		local next_total_shrink = 0
+		local any_capped = false
+		local shrink_to_distribute = remaining_shrink
+
+		for _, child in ipairs(active_children) do
+			local child_axis = self:getAxis(child, axis_idx)
+			local shrink_factor = child.layout_box.shrink / current_total_shrink
+			local target_shrink = shrink_to_distribute * shrink_factor
+			local target_size = child_axis.size - target_shrink
+
+			if target_size < child_axis.min_size then
+				-- Can't shrink below min_size, cap it
+				local actually_shrunk = child_axis.size - child_axis.min_size
+				child_axis.size = child_axis.min_size
+				remaining_shrink = remaining_shrink - actually_shrunk
+				any_capped = true
+			else
+				next_active_children[#next_active_children + 1] = child
+				next_total_shrink = next_total_shrink + child.layout_box.shrink
+			end
+		end
+
+		if not any_capped then
+			-- No children were capped, apply final shrink
+			for _, child in ipairs(active_children) do
+				local child_axis = self:getAxis(child, axis_idx)
+				local shrink_factor = child.layout_box.shrink / current_total_shrink
+				child_axis.size = child_axis.size - remaining_shrink * shrink_factor
+			end
+			remaining_shrink = 0
+			break
+		end
+
+		-- Swap active and next_active
+		next_active_children, active_children = active_children, next_active_children
+		current_total_shrink = next_total_shrink
 	end
 end
 
