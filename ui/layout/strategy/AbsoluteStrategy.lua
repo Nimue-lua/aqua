@@ -54,7 +54,9 @@ function AbsoluteStrategy:measure(node, axis_idx)
 			local child_axis = self:getAxis(child, axis_idx)
 			if child_axis.mode ~= SizeMode.Percent then
 				self.engine:measure(child, axis_idx)
-				s = math_max(s, child_axis.pos + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
+				-- Use user-configured left/top, not pos (which is set during arrange)
+				local offset = (axis_idx == Axis.X) and child.layout_box.left or child.layout_box.top
+				s = math_max(s, offset + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
 			end
 		end
 
@@ -67,7 +69,9 @@ function AbsoluteStrategy:measure(node, axis_idx)
 			local child_axis = self:getAxis(child, axis_idx)
 			if child_axis.mode == SizeMode.Percent then
 				self.engine:measure(child, axis_idx)
-				s = math_max(s, child_axis.pos + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
+				-- Use user-configured left/top, not pos (which is set during arrange)
+				local offset = (axis_idx == Axis.X) and child.layout_box.left or child.layout_box.top
+				s = math_max(s, offset + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
 			end
 		end
 	end

@@ -506,4 +506,73 @@ function test.mixed_strategies_tree(t)
 	t:eq(grid_item2.layout_box.y.pos, 0)
 end
 
+---@param t testing.T
+function test.absolute_container_auto_size_from_positioned_children(t)
+	-- Test that an absolute container with Auto size correctly calculates
+	-- its size based on children's left/top positions
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box.arrange = LayoutBox.Arrange.Absolute
+	container.layout_box:setWidthAuto()
+	container.layout_box:setHeightAuto()
+
+	-- Child positioned at (50, 30) with size (100, 80)
+	local child1 = container:add(new_node())
+	child1.layout_box:setDimensions(100, 80)
+	child1.layout_box.left = 50
+	child1.layout_box.top = 30
+
+	-- Child positioned at (200, 100) with size (50, 50)
+	local child2 = container:add(new_node())
+	child2.layout_box:setDimensions(50, 50)
+	child2.layout_box.left = 200
+	child2.layout_box.top = 100
+
+	engine:updateLayout({container})
+
+	-- Container should size to fit all children
+	-- Width: max(50 + 100, 200 + 50) = 250
+	-- Height: max(30 + 80, 100 + 50) = 150
+	t:eq(container.layout_box.x.size, 250)
+	t:eq(container.layout_box.y.size, 150)
+
+	-- Children should have correct positions
+	t:eq(child1.layout_box.x.pos, 50)
+	t:eq(child1.layout_box.y.pos, 30)
+	t:eq(child2.layout_box.x.pos, 200)
+	t:eq(child2.layout_box.y.pos, 100)
+end
+
+---@param t testing.T
+function test.absolute_container_with_margins(t)
+	-- Test that margins are correctly accounted for in absolute layout
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box.arrange = LayoutBox.Arrange.Absolute
+	container.layout_box:setWidthAuto()
+	container.layout_box:setHeightAuto()
+
+	-- Child at (10, 20) with size (100, 50) and margins (5, 10)
+	local child = container:add(new_node())
+	child.layout_box:setDimensions(100, 50)
+	child.layout_box.left = 10
+	child.layout_box.top = 20
+	child.layout_box.x.margin_start = 5
+	child.layout_box.x.margin_end = 10
+	child.layout_box.y.margin_start = 3
+	child.layout_box.y.margin_end = 7
+
+	engine:updateLayout({container})
+
+	-- Container size should include the child's position + size + margins
+	-- Width: 10 + 100 + 5 + 10 = 125
+	-- Height: 20 + 50 + 3 + 7 = 80
+	t:eq(container.layout_box.x.size, 125)
+	t:eq(container.layout_box.y.size, 80)
+
+	-- Child position should include margin_start
+	t:eq(child.layout_box.x.pos, 15)  -- 10 + 5
+	t:eq(child.layout_box.y.pos, 23)  -- 20 + 3
+end
+
 return test
