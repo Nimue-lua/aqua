@@ -393,7 +393,7 @@ function test.percent_child_with_changing_intrinsic_size(t)
 	-- Test that parent with Auto height correctly shrinks when intrinsic child shrinks
 	-- This tests the fix for the bug where Percent children used stale parent size
 	-- Root (FlexRow, 100% width)
-	--   └── container (Absolute, Auto height)
+	--   └── container (Stack, Auto height)
 	--         ├── percent_child (100% height - should follow container)
 	--         └── intrinsic_child (Auto - determines container size)
 	local engine = LayoutEngine()
@@ -404,11 +404,11 @@ function test.percent_child_with_changing_intrinsic_size(t)
 	root.layout_box.arrange = LayoutBox.Arrange.FlexRow
 	root.layout_box:setAlignItems(LayoutBox.AlignItems.Start) -- Don't stretch container
 
-	-- Container with Auto height
+	-- Container with Auto height (Stack is now default)
 	local container = root:add(new_node())
 	container.layout_box:setWidth(100)
 	container.layout_box:setHeightAuto()
-	container.layout_box.arrange = LayoutBox.Arrange.Absolute
+	-- container.layout_box.arrange = LayoutBox.Arrange.Stack -- Stack is default now
 
 	-- Percent height child
 	local percent_child = container:add(new_node())
@@ -442,56 +442,50 @@ function test.percent_child_with_changing_intrinsic_size(t)
 end
 
 ---@param t testing.T
-function test.absolute_container_auto_size_from_positioned_children(t)
-	-- Test that an absolute container with Auto size correctly calculates
-	-- its size based on children's left/top positions
+function test.stack_container_auto_size_from_children(t)
+	-- Test that a Stack container with Auto size correctly calculates
+	-- its size based on children's sizes (max of children)
 	local engine = LayoutEngine()
 	local container = new_node()
-	container.layout_box.arrange = LayoutBox.Arrange.Absolute
+	-- container.layout_box.arrange = LayoutBox.Arrange.Stack -- Stack is default
 	container.layout_box:setWidthAuto()
 	container.layout_box:setHeightAuto()
 
-	-- Child positioned at (50, 30) with size (100, 80)
+	-- Child with size (100, 80)
 	local child1 = container:add(new_node())
 	child1.layout_box:setDimensions(100, 80)
-	child1.layout_box.left = 50
-	child1.layout_box.top = 30
 
-	-- Child positioned at (200, 100) with size (50, 50)
+	-- Child with size (50, 50)
 	local child2 = container:add(new_node())
 	child2.layout_box:setDimensions(50, 50)
-	child2.layout_box.left = 200
-	child2.layout_box.top = 100
 
 	engine:updateLayout({container})
 
-	-- Container should size to fit all children
-	-- Width: max(50 + 100, 200 + 50) = 250
-	-- Height: max(30 + 80, 100 + 50) = 150
-	t:eq(container.layout_box.x.size, 250)
-	t:eq(container.layout_box.y.size, 150)
+	-- Container should size to max of children
+	-- Width: max(100, 50) = 100
+	-- Height: max(80, 50) = 80
+	t:eq(container.layout_box.x.size, 100)
+	t:eq(container.layout_box.y.size, 80)
 
-	-- Children should have correct positions
-	t:eq(child1.layout_box.x.pos, 50)
-	t:eq(child1.layout_box.y.pos, 30)
-	t:eq(child2.layout_box.x.pos, 200)
-	t:eq(child2.layout_box.y.pos, 100)
+	-- Children should overlap at position 0 (default Start alignment)
+	t:eq(child1.layout_box.x.pos, 0)
+	t:eq(child1.layout_box.y.pos, 0)
+	t:eq(child2.layout_box.x.pos, 0)
+	t:eq(child2.layout_box.y.pos, 0)
 end
 
 ---@param t testing.T
-function test.absolute_container_with_margins(t)
-	-- Test that margins are correctly accounted for in absolute layout
+function test.stack_container_with_margins(t)
+	-- Test that margins are correctly accounted for in Stack layout
 	local engine = LayoutEngine()
 	local container = new_node()
-	container.layout_box.arrange = LayoutBox.Arrange.Absolute
+	-- container.layout_box.arrange = LayoutBox.Arrange.Stack -- Stack is default
 	container.layout_box:setWidthAuto()
 	container.layout_box:setHeightAuto()
 
-	-- Child at (10, 20) with size (100, 50) and margins (5, 10)
+	-- Child with size (100, 50) and margins
 	local child = container:add(new_node())
 	child.layout_box:setDimensions(100, 50)
-	child.layout_box.left = 10
-	child.layout_box.top = 20
 	child.layout_box.x.margin_start = 5
 	child.layout_box.x.margin_end = 10
 	child.layout_box.y.margin_start = 3
@@ -499,15 +493,15 @@ function test.absolute_container_with_margins(t)
 
 	engine:updateLayout({container})
 
-	-- Container size should include the child's position + size + margins
-	-- Width: 10 + 100 + 5 + 10 = 125
-	-- Height: 20 + 50 + 3 + 7 = 80
-	t:eq(container.layout_box.x.size, 125)
-	t:eq(container.layout_box.y.size, 80)
+	-- Container size should include the child's size + margins
+	-- Width: 100 + 5 + 10 = 115
+	-- Height: 50 + 3 + 7 = 60
+	t:eq(container.layout_box.x.size, 115)
+	t:eq(container.layout_box.y.size, 60)
 
-	-- Child position should include margin_start
-	t:eq(child.layout_box.x.pos, 15)  -- 10 + 5
-	t:eq(child.layout_box.y.pos, 23)  -- 20 + 3
+	-- Child position should include margin_start (Start alignment is default)
+	t:eq(child.layout_box.x.pos, 5)
+	t:eq(child.layout_box.y.pos, 3)
 end
 
 ---@param t testing.T
@@ -528,10 +522,13 @@ function test.intrinsic_size_in_nested_auto_container(t)
 	row.layout_box:setHeightAuto()
 	row.layout_box:setChildGap(10)
 
-	-- Panel with padding (absolute by default, auto size)
+	-- Panel with padding (Stack by default, auto size)
+	-- Set align_items = Start to prevent stretching children
 	local panel = row:add(new_node())
 	panel.layout_box:setWidthAuto()
 	panel.layout_box:setHeightAuto()
+	panel.layout_box:setAlignItems(LayoutBox.AlignItems.Start)
+	panel.layout_box:setJustifyContent(LayoutBox.JustifyContent.Start)
 	panel.layout_box:setPaddings({5, 20, 5, 20}) -- top, right, bottom, left
 
 	-- Label with intrinsic size
@@ -546,8 +543,8 @@ function test.intrinsic_size_in_nested_auto_container(t)
 	t:eq(label.layout_box.y.size, 20, "label should have intrinsic height")
 
 	-- Panel should size to fit label + padding
-	t:eq(panel.layout_box.x.size, 140, "panel width should be label + padding")  -- 100 + 20 + 20
-	t:eq(panel.layout_box.y.size, 30, "panel height should be label + padding")  -- 20 + 5 + 5
+	t:eq(panel.layout_box.x.size, 140, "panel width should be label + padding") -- 100 + 20 + 20
+	t:eq(panel.layout_box.y.size, 30, "panel height should be label + padding") -- 20 + 5 + 5
 
 	-- Row should stretch to fill root width (flex_col default align_items = Stretch)
 	t:eq(row.layout_box.x.size, 800, "row width should stretch to root width")
@@ -559,7 +556,7 @@ function test.intrinsic_size_after_parent_resize(t)
 	-- This test reproduces the bug where a Label stays wrapped after parent is resized
 	-- Root (FlexCol, fixed size)
 	--   Row (FlexRow, Auto size)
-	--     Panel (Absolute, Auto size, padding)
+	--     Panel (Stack, Auto size, padding)
 	--       Label (intrinsic size)
 	local engine = LayoutEngine()
 
@@ -576,6 +573,8 @@ function test.intrinsic_size_after_parent_resize(t)
 	local panel = row:add(new_node())
 	panel.layout_box:setWidthAuto()
 	panel.layout_box:setHeightAuto()
+	panel.layout_box:setAlignItems(LayoutBox.AlignItems.Start)
+	panel.layout_box:setJustifyContent(LayoutBox.JustifyContent.Start)
 	panel.layout_box:setPaddings({5, 20, 5, 20})
 
 	local label = panel:add(new_node_with_intrinsic_size(100, 20))
@@ -606,6 +605,164 @@ function test.intrinsic_size_after_parent_resize(t)
 
 	engine:updateLayout(root.children)
 	t:eq(label.layout_box.x.size, 100, "label width should be intrinsic after expand")
+end
+
+-------------------------------------------------------------------------------
+-- StackStrategy Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.stack_center_alignment(t)
+	-- Test that a child is perfectly centered in a Stack
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box:setDimensions(400, 400)
+	container.layout_box.arrange = LayoutBox.Arrange.Stack
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.Center)
+	container.layout_box:setJustifyContent(LayoutBox.JustifyContent.Center)
+
+	local child = container:add(new_node())
+	child.layout_box:setDimensions(100, 50)
+
+	engine:updateLayout(container.children)
+
+	-- Child should be centered:
+	-- X: (400 - 100) / 2 = 150
+	-- Y: (400 - 50) / 2 = 175
+	t:eq(child.layout_box.x.pos, 150, "child should be centered on X")
+	t:eq(child.layout_box.y.pos, 175, "child should be centered on Y")
+	t:eq(child.layout_box.x.size, 100)
+	t:eq(child.layout_box.y.size, 50)
+end
+
+---@param t testing.T
+function test.stack_children_overlap(t)
+	-- Test that all children in a Stack overlap (Z-axis stacking)
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box:setWidthAuto()
+	container.layout_box:setHeightAuto()
+	container.layout_box.arrange = LayoutBox.Arrange.Stack
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.Start)
+	container.layout_box:setJustifyContent(LayoutBox.JustifyContent.Start)
+
+	local child1 = container:add(new_node())
+	child1.layout_box:setDimensions(100, 100)
+
+	local child2 = container:add(new_node())
+	child2.layout_box:setDimensions(50, 50)
+
+	local child3 = container:add(new_node())
+	child3.layout_box:setDimensions(150, 75)
+
+	engine:updateLayout(container.children)
+
+	-- All children should start at position 0 (Start alignment)
+	t:eq(child1.layout_box.x.pos, 0)
+	t:eq(child1.layout_box.y.pos, 0)
+	t:eq(child2.layout_box.x.pos, 0)
+	t:eq(child2.layout_box.y.pos, 0)
+	t:eq(child3.layout_box.x.pos, 0)
+	t:eq(child3.layout_box.y.pos, 0)
+
+	-- Container size should be max of children
+	t:eq(container.layout_box.x.size, 150, "container width should be max child width")
+	t:eq(container.layout_box.y.size, 100, "container height should be max child height")
+end
+
+---@param t testing.T
+function test.stack_stretch_alignment(t)
+	-- Test that Stretch alignment works in Stack
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box:setDimensions(200, 100)
+	container.layout_box.arrange = LayoutBox.Arrange.Stack
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.Stretch)
+	container.layout_box:setJustifyContent(LayoutBox.JustifyContent.Stretch)
+
+	local child = container:add(new_node())
+	child.layout_box:setWidthAuto()
+	child.layout_box:setHeightAuto()
+
+	engine:updateLayout(container.children)
+
+	-- Child should stretch to fill container
+	t:eq(child.layout_box.x.size, 200, "child should stretch to container width")
+	t:eq(child.layout_box.y.size, 100, "child should stretch to container height")
+end
+
+---@param t testing.T
+function test.stack_end_alignment(t)
+	-- Test End alignment in Stack
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box:setDimensions(200, 100)
+	container.layout_box.arrange = LayoutBox.Arrange.Stack
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.End)
+	container.layout_box:setJustifyContent(LayoutBox.JustifyContent.End)
+
+	local child = container:add(new_node())
+	child.layout_box:setDimensions(50, 30)
+
+	engine:updateLayout(container.children)
+
+	-- Child should be at end:
+	-- X: 200 - 50 = 150
+	-- Y: 100 - 30 = 70
+	t:eq(child.layout_box.x.pos, 150, "child should be at end on X")
+	t:eq(child.layout_box.y.pos, 70, "child should be at end on Y")
+end
+
+---@param t testing.T
+function test.stack_with_padding(t)
+	-- Test Stack with padding
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box:setDimensions(200, 100)
+	container.layout_box.arrange = LayoutBox.Arrange.Stack
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.Center)
+	container.layout_box:setJustifyContent(LayoutBox.JustifyContent.Center)
+	container.layout_box:setPaddings({10, 20, 10, 20}) -- top, right, bottom, left
+
+	local child = container:add(new_node())
+	child.layout_box:setDimensions(50, 30)
+
+	engine:updateLayout(container.children)
+
+	-- Available space = container - padding
+	-- Available width: 200 - 20 - 20 = 160
+	-- Available height: 100 - 10 - 10 = 80
+	-- Center position:
+	-- X: 20 + (160 - 50) / 2 = 20 + 55 = 75
+	-- Y: 10 + (80 - 30) / 2 = 10 + 25 = 35
+	t:eq(child.layout_box.x.pos, 75, "child should be centered with padding on X")
+	t:eq(child.layout_box.y.pos, 35, "child should be centered with padding on Y")
+end
+
+---@param t testing.T
+function test.stack_with_margins(t)
+	-- Test Stack with child margins
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box:setDimensions(200, 100)
+	container.layout_box.arrange = LayoutBox.Arrange.Stack
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.Center)
+	container.layout_box:setJustifyContent(LayoutBox.JustifyContent.Center)
+
+	local child = container:add(new_node())
+	child.layout_box:setDimensions(50, 30)
+	child.layout_box:setMargins({5, 10, 5, 10}) -- top, right, bottom, left
+
+	engine:updateLayout(container.children)
+
+	-- Available space = container - margins
+	-- Available width: 200 - 10 - 10 = 180
+	-- Available height: 100 - 5 - 5 = 90
+	-- Center position:
+	-- X: (180 - 50) / 2 + 10 = 65 + 10 = 75
+	-- Y: (90 - 30) / 2 + 5 = 30 + 5 = 35
+	t:eq(child.layout_box.x.pos, 75, "child should be centered with margins on X")
+	t:eq(child.layout_box.y.pos, 35, "child should be centered with margins on Y")
 end
 
 return test
