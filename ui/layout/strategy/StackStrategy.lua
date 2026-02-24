@@ -8,6 +8,7 @@ local JustifyContent = Enums.JustifyContent
 local AlignItems = Enums.AlignItems
 local math_clamp = math_util.clamp
 local math_max = math.max
+local math_min = math.min
 
 ---@class ui.StackStrategy: ui.LayoutStrategy
 ---@operator call: ui.StackStrategy
@@ -60,8 +61,23 @@ function StackStrategy:measure(node, axis_idx)
 				-- Node's X is fixed/percent - use its own size
 				constraint = x_axis.size
 			end
+		elseif axis_idx == Axis.X then
+			-- For X axis, constrain intrinsic width to parent's available width
+			-- Only constrain if parent has a Fixed/Percent size (independent of children)
+			if node.parent then
+				local parent_x = node.parent.layout_box.x
+				if parent_x.mode == SizeMode.Fixed or parent_x.mode == SizeMode.Percent then
+					local available = parent_x.size - parent_x.padding_start - parent_x.padding_end
+						- axis.margin_start - axis.margin_end
+					local intrinsic_width = self:getIntrinsicSize(node, axis_idx, nil) or 0
+					-- Constrain to parent's available width (text should wrap, not overflow)
+					s = math.min(intrinsic_width, available)
+				end
+			end
 		end
-		s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
+		if s == 0 then
+			s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
+		end
 	else
 		-- Container: size is the max of children's sizes
 		-- First pass: measure non-Percent children

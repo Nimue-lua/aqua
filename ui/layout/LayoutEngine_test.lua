@@ -765,4 +765,71 @@ function test.stack_with_margins(t)
 	t:eq(child.layout_box.y.pos, 35, "child should be centered with margins on Y")
 end
 
+---@param t testing.T
+function test.label_wrapping_with_center_alignment(t)
+	-- This test reproduces the EXACT user scenario:
+	-- - Root has fixed dimensions
+	-- - Screen container has 100% width and height
+	-- - Screen has 100% width and height with justify_content="center" align_items="center"
+	-- - Label has intrinsic width larger than screen width
+	-- - Label should wrap to fit within screen width
+
+	local function new_wrapping_node(intrinsic_width, line_height)
+		return {
+			children = {},
+			layout_box = LayoutBox(),
+			add = function(self, node)
+				table.insert(self.children, node)
+				node.parent = self
+				return node
+			end,
+			---@param axis_idx ui.Axis
+			---@param constraint number?
+			---@return number
+			getIntrinsicSize = function(self, axis_idx, constraint)
+				if axis_idx == Axis.X then
+					-- Returns full intrinsic width (like unwrapped text)
+					return intrinsic_width
+				else
+					-- Y axis: calculate height based on constraint (wrapping)
+					local width = constraint or intrinsic_width
+					local lines = math.ceil(intrinsic_width / width)
+					return line_height * lines
+				end
+			end
+		}
+	end
+
+	local engine = LayoutEngine()
+
+	-- Root: Fixed dimensions (like window)
+	local root = new_node()
+	root.layout_box:setDimensions(655, 720)
+
+	-- Screen container: 100% width and height
+	local screen_container = root:add(new_node())
+	screen_container.layout_box:setWidthPercent(1.0)
+	screen_container.layout_box:setHeightPercent(1.0)
+
+	-- Screen: 100% width and height with center alignment
+	local screen = screen_container:add(new_node())
+	screen.layout_box:setWidthPercent(1.0)
+	screen.layout_box:setHeightPercent(1.0)
+	screen.layout_box:setJustifyContent(LayoutBox.JustifyContent.Center)
+	screen.layout_box:setAlignItems(LayoutBox.AlignItems.Center)
+
+	-- Label: intrinsic width 928 (larger than screen's 655)
+	local label = screen:add(new_wrapping_node(928, 21))
+	label.layout_box:setWidthAuto()
+	label.layout_box:setHeightAuto()
+
+	engine:updateLayout(root.children)
+
+	-- The label should be constrained to screen width (655)
+	-- NOT return its full intrinsic width (928)
+	t:eq(root.layout_box.x.size, 655, "root has fixed width")
+	t:eq(screen.layout_box.x.size, 655, "screen has 100% of root width")
+	t:eq(label.layout_box.x.size, 655, "label should be constrained to screen width, not use intrinsic 928")
+end
+
 return test
