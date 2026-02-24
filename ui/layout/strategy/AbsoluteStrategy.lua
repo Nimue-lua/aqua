@@ -49,11 +49,30 @@ function AbsoluteStrategy:measure(node, axis_idx)
 		end
 		s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
 	else
+		-- First pass: measure non-Percent children to establish base size
 		for _, child in ipairs(node.children) do
-			self.engine:measure(child, axis_idx)
 			local child_axis = self:getAxis(child, axis_idx)
-			-- Include child position + size + margins
-			s = math_max(s, child_axis.pos + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
+			if child_axis.mode ~= SizeMode.Percent then
+				self.engine:measure(child, axis_idx)
+				-- Use user-configured left/top, not pos (which is set during arrange)
+				local offset = (axis_idx == Axis.X) and child.layout_box.left or child.layout_box.top
+				s = math_max(s, offset + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
+			end
+		end
+
+		-- Set preliminary size for Percent children to reference
+		local base_size = axis.padding_start + s + axis.padding_end
+		axis.size = math_clamp(base_size, min_s, max_s)
+
+		-- Second pass: measure Percent children using the preliminary size
+		for _, child in ipairs(node.children) do
+			local child_axis = self:getAxis(child, axis_idx)
+			if child_axis.mode == SizeMode.Percent then
+				self.engine:measure(child, axis_idx)
+				-- Use user-configured left/top, not pos (which is set during arrange)
+				local offset = (axis_idx == Axis.X) and child.layout_box.left or child.layout_box.top
+				s = math_max(s, offset + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
+			end
 		end
 	end
 
@@ -107,11 +126,11 @@ end
 ---@param node ui.Node
 function AbsoluteStrategy:arrange(node)
 	for _, child in ipairs(node.children) do
-		-- Apply margins to position
 		local child_x = child.layout_box.x
 		local child_y = child.layout_box.y
-		child_x.pos = child_x.pos + child_x.margin_start
-		child_y.pos = child_y.pos + child_y.margin_start
+		-- Use left/top as configured position, compute pos with margins
+		child_x.pos = child.layout_box.left + child_x.margin_start
+		child_y.pos = child.layout_box.top + child_y.margin_start
 
 		self:arrangeChild(child)
 	end

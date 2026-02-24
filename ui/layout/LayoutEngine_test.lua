@@ -387,71 +387,124 @@ function test.intrinsic_size_mixed_with_fixed(t)
 end
 
 ---@param t testing.T
-function test.mixed_strategies_tree(t)
-	-- Test a tree with multiple layout strategies at different levels
-	-- Root (Absolute)
-	--   └── flex_container (FlexRow)
-	--         ├── item1
-	--         └── grid_container (Grid)
-	--               ├── grid_item1
-	--               └── grid_item2
+function test.percent_child_with_changing_intrinsic_size(t)
+	-- Test that parent with Auto height correctly shrinks when intrinsic child shrinks
+	-- This tests the fix for the bug where Percent children used stale parent size
+	-- Root (FlexRow, 100% width)
+	--   └── container (Absolute, Auto height)
+	--         ├── percent_child (100% height - should follow container)
+	--         └── intrinsic_child (Auto - determines container size)
 	local engine = LayoutEngine()
 
-	-- Root with absolute layout
+	-- Root with fixed dimensions
 	local root = new_node()
-	root.layout_box:setDimensions(400, 300)
-	root.layout_box.arrange = LayoutBox.Arrange.Absolute
+	root.layout_box:setDimensions(200, 200)
+	root.layout_box.arrange = LayoutBox.Arrange.FlexRow
 
-	-- Flex container positioned at (10, 20)
-	local flex_container = root:add(new_node())
-	flex_container.layout_box:setDimensions(200, 200)
-	flex_container.layout_box.arrange = LayoutBox.Arrange.FlexRow
-	flex_container.layout_box.x.pos = 10
-	flex_container.layout_box.y.pos = 20
+	-- Container with Auto height
+	local container = root:add(new_node())
+	container.layout_box:setWidth(100)
+	container.layout_box:setHeightAuto()
+	container.layout_box.arrange = LayoutBox.Arrange.Absolute
 
-	-- Item in flex container
-	local item1 = flex_container:add(new_node())
-	item1.layout_box:setDimensions(50, 100)
+	-- Percent height child
+	local percent_child = container:add(new_node())
+	percent_child.layout_box:setWidth(50)
+	percent_child.layout_box:setHeightPercent(1.0) -- 100% of parent
 
-	-- Grid container as second item in flex
-	local grid_container = flex_container:add(new_node())
-	grid_container.layout_box:setDimensions(100, 100)
-	grid_container.layout_box.arrange = LayoutBox.Arrange.Grid
-	grid_container.layout_box:setGridColumns({50, 50})
-	grid_container.layout_box:setGridRows({50, 50})
+	-- Intrinsic size child that determines container height
+	local intrinsic_child = container:add(new_node_with_intrinsic_size(50, 100))
+	intrinsic_child.layout_box:setWidth(50)
+	intrinsic_child.layout_box:setHeightAuto()
 
-	-- Grid items
-	local grid_item1 = grid_container:add(new_node())
-	grid_item1.layout_box:setDimensions(50, 50)
-	grid_item1.layout_box:setGridColumn(1)
-	grid_item1.layout_box:setGridRow(1)
+	-- First layout: intrinsic child has height 100
+	engine:updateLayout(container.children)
+	t:eq(container.layout_box.y.size, 100, "container height should be 100 from intrinsic child")
+	t:eq(percent_child.layout_box.y.size, 100, "percent child should be 100% of 100")
 
-	local grid_item2 = grid_container:add(new_node())
-	grid_item2.layout_box:setDimensions(50, 50)
-	grid_item2.layout_box:setGridColumn(2)
-	grid_item2.layout_box:setGridRow(1)
+	-- Simulate intrinsic child shrinking (like text unwrapping)
+	intrinsic_child.getIntrinsicSize = function(self, axis_idx, constraint)
+		if axis_idx == Axis.X then
+			return 50
+		else
+			return 32 -- Height shrunk from 100 to 32
+		end
+	end
+	intrinsic_child.layout_box:markDirty(Axis.Both)
 
-	engine:updateLayout(root.children)
+	-- Second layout: intrinsic child now has height 32
+	engine:updateLayout(container.children)
+	t:eq(container.layout_box.y.size, 32, "container height should shrink to 32")
+	t:eq(percent_child.layout_box.y.size, 32, "percent child should be 100% of 32")
+end
 
-	-- Flex container should be at (10, 20) (absolute position preserved)
-	t:eq(flex_container.layout_box.x.pos, 10)
-	t:eq(flex_container.layout_box.y.pos, 20)
+---@param t testing.T
+function test.absolute_container_auto_size_from_positioned_children(t)
+	-- Test that an absolute container with Auto size correctly calculates
+	-- its size based on children's left/top positions
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box.arrange = LayoutBox.Arrange.Absolute
+	container.layout_box:setWidthAuto()
+	container.layout_box:setHeightAuto()
 
-	-- item1 should be at (0, 0) relative to flex container
-	t:eq(item1.layout_box.x.pos, 0)
-	t:eq(item1.layout_box.y.pos, 0)
+	-- Child positioned at (50, 30) with size (100, 80)
+	local child1 = container:add(new_node())
+	child1.layout_box:setDimensions(100, 80)
+	child1.layout_box.left = 50
+	child1.layout_box.top = 30
 
-	-- grid_container should be at (50, 0) relative to flex container (after item1)
-	t:eq(grid_container.layout_box.x.pos, 50)
-	t:eq(grid_container.layout_box.y.pos, 0)
+	-- Child positioned at (200, 100) with size (50, 50)
+	local child2 = container:add(new_node())
+	child2.layout_box:setDimensions(50, 50)
+	child2.layout_box.left = 200
+	child2.layout_box.top = 100
 
-	-- grid_item1 should be at (0, 0) relative to grid container
-	t:eq(grid_item1.layout_box.x.pos, 0)
-	t:eq(grid_item1.layout_box.y.pos, 0)
+	engine:updateLayout({container})
 
-	-- grid_item2 should be at (50, 0) relative to grid container (second column)
-	t:eq(grid_item2.layout_box.x.pos, 50)
-	t:eq(grid_item2.layout_box.y.pos, 0)
+	-- Container should size to fit all children
+	-- Width: max(50 + 100, 200 + 50) = 250
+	-- Height: max(30 + 80, 100 + 50) = 150
+	t:eq(container.layout_box.x.size, 250)
+	t:eq(container.layout_box.y.size, 150)
+
+	-- Children should have correct positions
+	t:eq(child1.layout_box.x.pos, 50)
+	t:eq(child1.layout_box.y.pos, 30)
+	t:eq(child2.layout_box.x.pos, 200)
+	t:eq(child2.layout_box.y.pos, 100)
+end
+
+---@param t testing.T
+function test.absolute_container_with_margins(t)
+	-- Test that margins are correctly accounted for in absolute layout
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box.arrange = LayoutBox.Arrange.Absolute
+	container.layout_box:setWidthAuto()
+	container.layout_box:setHeightAuto()
+
+	-- Child at (10, 20) with size (100, 50) and margins (5, 10)
+	local child = container:add(new_node())
+	child.layout_box:setDimensions(100, 50)
+	child.layout_box.left = 10
+	child.layout_box.top = 20
+	child.layout_box.x.margin_start = 5
+	child.layout_box.x.margin_end = 10
+	child.layout_box.y.margin_start = 3
+	child.layout_box.y.margin_end = 7
+
+	engine:updateLayout({container})
+
+	-- Container size should include the child's position + size + margins
+	-- Width: 10 + 100 + 5 + 10 = 125
+	-- Height: 20 + 50 + 3 + 7 = 80
+	t:eq(container.layout_box.x.size, 125)
+	t:eq(container.layout_box.y.size, 80)
+
+	-- Child position should include margin_start
+	t:eq(child.layout_box.x.pos, 15)  -- 10 + 5
+	t:eq(child.layout_box.y.pos, 23)  -- 20 + 3
 end
 
 return test

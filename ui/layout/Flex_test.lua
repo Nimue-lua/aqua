@@ -400,6 +400,27 @@ function test.align_items_stretch_with_padding_and_margins(t)
 	t:eq(c1.layout_box.y.size, 70)
 end
 
+---@param t testing.T
+function test.align_items_stretch_zero_container_size(t)
+	-- Test that cross-axis stretch works even when container size is exactly 0
+	-- This was a bug: available_space ~= 0 check skipped stretch when size was 0
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(0) -- Container height is 0
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Stretch)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(50)
+	c1.layout_box:setHeightAuto() -- Should stretch to 0
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Child should be stretched to 0 (container height minus margins)
+	t:eq(c1.layout_box.y.size, 0, "child should stretch to 0 when container is 0")
+end
+
 -------------------------------------------------------------------------------
 -- JustifyContent with Padding Tests
 -------------------------------------------------------------------------------
@@ -468,6 +489,252 @@ function test.justify_content_space_between_with_padding(t)
 	-- c2.x.pos = 20 + 50 + 60 = 130
 	t:eq(c1.layout_box.x.pos, 20)
 	t:eq(c2.layout_box.x.pos, 130)
+end
+
+-------------------------------------------------------------------------------
+-- Shrink Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.shrink_proportional(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(150)
+	c1.layout_box:setGrow(1)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setWidth(150)
+	c2.layout_box:setGrow(1)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Total width needed: 150 + 150 = 300
+	-- Available: 200
+	-- Shrink by: 100
+	-- Each shrinks by 50 (proportional to grow factor)
+	t:eq(c1.layout_box.x.size, 100)
+	t:eq(c2.layout_box.x.size, 100)
+end
+
+---@param t testing.T
+function test.shrink_with_min_size(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(150)
+	c1.layout_box:setShrink(1)
+	c1.layout_box.x:setMin(120) -- min_size = 120
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setWidth(150)
+	c2.layout_box:setShrink(1)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Total width needed: 150 + 150 = 300
+	-- Available: 200
+	-- Shrink by: 100
+	-- c1 can only shrink to 120 (shrinks by 30)
+	-- c2 must shrink by remaining 70 -> 150 - 70 = 80
+	t:eq(c1.layout_box.x.size, 120)
+	t:eq(c2.layout_box.x.size, 80)
+end
+
+---@param t testing.T
+function test.shrink_factor_proportional(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+
+	-- c1 has shrink=2, c2 has shrink=1
+	-- c1 should shrink twice as much as c2
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(150)
+	c1.layout_box:setShrink(2)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setWidth(150)
+	c2.layout_box:setShrink(1)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Total width needed: 150 + 150 = 300
+	-- Available: 200
+	-- Shrink by: 100
+	-- total_shrink = 2 + 1 = 3
+	-- c1 shrinks by: 100 * (2/3) = 66.67 -> 150 - 66.67 = 83.33
+	-- c2 shrinks by: 100 * (1/3) = 33.33 -> 150 - 33.33 = 116.67
+	t:aeq(c1.layout_box.x.size, 83.33, 0.1)
+	t:aeq(c2.layout_box.x.size, 116.67, 0.1)
+end
+
+---@param t testing.T
+function test.shrink_scaled_by_size(t)
+	-- Test CSS Flexbox behavior: shrink is scaled by base size
+	-- This prevents small elements from collapsing when paired with large elements
+	local root = new_node()
+	root.layout_box:setWidth(990)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+
+	-- c1 is large (1000px), c2 is small (10px), both have shrink=1
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(1000)
+	c1.layout_box:setShrink(1)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setWidth(10)
+	c2.layout_box:setShrink(1)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Total width needed: 1000 + 10 = 1010
+	-- Available: 990
+	-- Shrink by: 20
+	-- 
+	-- CSS Flexbox uses scaled shrink factor (shrink * base_size):
+	-- weight_c1 = 1 * 1000 = 1000
+	-- weight_c2 = 1 * 10 = 10
+	-- total_weight = 1010
+	-- 
+	-- c1 shrinks by: 20 * (1000/1010) ≈ 19.8 -> 1000 - 19.8 = 980.2
+	-- c2 shrinks by: 20 * (10/1010) ≈ 0.2 -> 10 - 0.2 = 9.8
+	-- 
+	-- Both shrink by ~2% of their size (proportional)
+	-- Old buggy behavior would shrink both by 10px, collapsing c2 to 0px
+	t:aeq(c1.layout_box.x.size, 980.2, 0.1)
+	t:aeq(c2.layout_box.x.size, 9.8, 0.1)
+end
+
+---@param t testing.T
+function test.shrink_zero_no_shrink(t)
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+
+	-- c1 has shrink=0, should not shrink
+	local c1 = root:add(new_node())
+	c1.layout_box:setWidth(150)
+	c1.layout_box:setShrink(0)
+
+	-- c2 has shrink=1, should absorb all shrink
+	local c2 = root:add(new_node())
+	c2.layout_box:setWidth(150)
+	c2.layout_box:setShrink(1)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Total width needed: 150 + 150 = 300
+	-- Available: 200
+	-- Shrink by: 100
+	-- c1 has shrink=0, so it stays at 150
+	-- c2 has shrink=1, absorbs all 100 -> 150 - 100 = 50
+	t:eq(c1.layout_box.x.size, 150)
+	t:eq(c2.layout_box.x.size, 50)
+end
+
+---@param t testing.T
+function test.shrink_nested_flex_container(t)
+	-- Scenario: Root with variable dimensions
+	-- Flex container with width = 70% and height = 100%
+	-- Child with grow in a flex container
+	-- Child of a child with width = 100% and height = 100%
+
+	local root = new_node()
+	root.layout_box:setWidth(400)
+	root.layout_box:setHeight(200)
+
+	-- Flex container with percent sizing
+	local flex_container = root:add(new_node())
+	flex_container.layout_box:setWidthPercent(0.7)
+	flex_container.layout_box:setHeightPercent(1.0)
+	flex_container.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+
+	-- Child with grow
+	local growing_child = flex_container:add(new_node())
+	growing_child.layout_box:setGrow(1)
+	growing_child.layout_box:setHeightAuto()
+
+	-- Grandchild with 100% dimensions
+	local grandchild = growing_child:add(new_node())
+	grandchild.layout_box:setWidthPercent(1.0)
+	grandchild.layout_box:setHeightPercent(1.0)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Initial layout
+	-- Flex container: 70% of 400 = 280 width, 100% of 200 = 200 height
+	t:eq(flex_container.layout_box.x.size, 280)
+	t:eq(flex_container.layout_box.y.size, 200)
+	-- Growing child should fill the flex container
+	t:eq(growing_child.layout_box.x.size, 280)
+	-- Grandchild should be 100% of growing_child
+	t:eq(grandchild.layout_box.x.size, 280)
+
+	-- Now shrink the root
+	root.layout_box:setWidth(200)
+	engine:updateLayout(root.children)
+
+	-- After shrinking:
+	-- Flex container: 70% of 200 = 140 width
+	t:eq(flex_container.layout_box.x.size, 140)
+	-- Growing child should shrink to fit
+	t:eq(growing_child.layout_box.x.size, 140)
+	-- Grandchild should also shrink
+	t:eq(grandchild.layout_box.x.size, 140)
+end
+
+-------------------------------------------------------------------------------
+-- Gap with Percent Children Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.gap_with_percent_children(t)
+	-- Test that gap is calculated correctly when mixing Percent and non-Percent children
+	-- This tests the fix for double gap calculation bug
+	local root = new_node()
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	root.layout_box:setWidthAuto()
+	root.layout_box:setHeight(100)
+	root.layout_box.child_gap = 10
+
+	-- Two fixed-width children
+	local c1 = root:add(new_node())
+	c1.layout_box:setDimensions(50, 50)
+
+	local c2 = root:add(new_node())
+	c2.layout_box:setDimensions(50, 50)
+
+	-- One percent-width child
+	local c3 = root:add(new_node())
+	c3.layout_box:setWidthPercent(0.5) -- 50% of container
+	c3.layout_box:setHeight(50)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- Expected calculation:
+	-- First pass: c1=50, c2=50, s=100, child_count=2
+	-- Preliminary container size = 100 (for percent child to reference)
+	-- Second pass: c3 = 50% of 100 = 50, s=150, child_count=3
+	-- Gap: 10 * (3-1) = 20
+	-- Final: 150 + 20 = 170
+	t:eq(root.layout_box.x.size, 170, "container width with gap and percent child")
 end
 
 return test

@@ -8,19 +8,16 @@ local bit_band = bit.band
 
 local AbsoluteStrategy = require("ui.layout.strategy.AbsoluteStrategy")
 local FlexStrategy = require("ui.layout.strategy.FlexStrategy")
-local GridStrategy = require("ui.layout.strategy.GridStrategy")
 
 ---@class ui.LayoutEngine
 ---@operator call: ui.LayoutEngine
 ---@field absolute_strategy ui.AbsoluteStrategy
 ---@field flex_strategy ui.FlexStrategy
----@field grid_strategy ui.GridStrategy
 local LayoutEngine = class()
 
 function LayoutEngine:new()
 	self.absolute_strategy = AbsoluteStrategy(self)
 	self.flex_strategy = FlexStrategy(self)
-	self.grid_strategy = GridStrategy(self)
 end
 
 ---@param node ui.Node
@@ -32,8 +29,6 @@ function LayoutEngine:getStrategy(node)
 		return self.absolute_strategy
 	elseif arrange == Arrange.FlexRow or arrange == Arrange.FlexCol then
 		return self.flex_strategy
-	elseif arrange == Arrange.Grid then
-		return self.grid_strategy
 	end
 
 	-- Default to absolute
