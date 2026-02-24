@@ -2,6 +2,7 @@ local IPeer = require("icc.IPeer")
 local PackedMessage = require("icc.PackedMessage")
 
 ---@class icc.ContextQueuePeer: icc.IPeer
+---@operator call: icc.ContextQueuePeer
 ---@field queue icc.IQueue target queue
 ---@field sid any sender id
 local ContextQueuePeer = IPeer + {}
