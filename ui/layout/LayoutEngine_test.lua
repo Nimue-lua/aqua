@@ -309,6 +309,7 @@ function test.intrinsic_size_with_fixed_width(t)
 	local container = new_node()
 	container.layout_box:setDimensions(100, 100)
 	container.layout_box.arrange = LayoutBox.Arrange.FlexRow
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.Start) -- Don't stretch
 
 	-- Node with intrinsic size but fixed width
 	local intrinsic_node = container:add(new_node_with_intrinsic_size(64, 48))
@@ -363,6 +364,7 @@ function test.intrinsic_size_mixed_with_fixed(t)
 	local engine = LayoutEngine()
 	local container = new_node()
 	container.layout_box.arrange = LayoutBox.Arrange.FlexRow
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.Start) -- Don't stretch
 
 	-- Node with intrinsic size
 	local intrinsic_node = container:add(new_node_with_intrinsic_size(64, 48))
@@ -400,6 +402,7 @@ function test.percent_child_with_changing_intrinsic_size(t)
 	local root = new_node()
 	root.layout_box:setDimensions(200, 200)
 	root.layout_box.arrange = LayoutBox.Arrange.FlexRow
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Start) -- Don't stretch container
 
 	-- Container with Auto height
 	local container = root:add(new_node())
@@ -505,6 +508,104 @@ function test.absolute_container_with_margins(t)
 	-- Child position should include margin_start
 	t:eq(child.layout_box.x.pos, 15)  -- 10 + 5
 	t:eq(child.layout_box.y.pos, 23)  -- 20 + 3
+end
+
+---@param t testing.T
+function test.intrinsic_size_in_nested_auto_container(t)
+	-- This test reproduces the bug where a Label inside nested containers
+	-- gets width=0 because parent size is 0 during measurement
+	local engine = LayoutEngine()
+
+	-- Root with fixed size (like Screen)
+	local root = new_node()
+	root.layout_box:setDimensions(800, 600)
+	root.layout_box.arrange = LayoutBox.Arrange.FlexCol
+
+	-- Row container (flex_row, auto size)
+	local row = root:add(new_node())
+	row.layout_box.arrange = LayoutBox.Arrange.FlexRow
+	row.layout_box:setWidthAuto()
+	row.layout_box:setHeightAuto()
+	row.layout_box:setChildGap(10)
+
+	-- Panel with padding (absolute by default, auto size)
+	local panel = row:add(new_node())
+	panel.layout_box:setWidthAuto()
+	panel.layout_box:setHeightAuto()
+	panel.layout_box:setPaddings({5, 20, 5, 20}) -- top, right, bottom, left
+
+	-- Label with intrinsic size
+	local label = panel:add(new_node_with_intrinsic_size(100, 20))
+	label.layout_box:setWidthAuto()
+	label.layout_box:setHeightAuto()
+
+	engine:updateLayout(root.children)
+
+	-- Label should have its intrinsic width, not 0
+	t:eq(label.layout_box.x.size, 100, "label should have intrinsic width")
+	t:eq(label.layout_box.y.size, 20, "label should have intrinsic height")
+
+	-- Panel should size to fit label + padding
+	t:eq(panel.layout_box.x.size, 140, "panel width should be label + padding")  -- 100 + 20 + 20
+	t:eq(panel.layout_box.y.size, 30, "panel height should be label + padding")  -- 20 + 5 + 5
+
+	-- Row should stretch to fill root width (flex_col default align_items = Stretch)
+	t:eq(row.layout_box.x.size, 800, "row width should stretch to root width")
+	t:eq(row.layout_box.y.size, 30, "row height should fit panel")
+end
+
+---@param t testing.T
+function test.intrinsic_size_after_parent_resize(t)
+	-- This test reproduces the bug where a Label stays wrapped after parent is resized
+	-- Root (FlexCol, fixed size)
+	--   Row (FlexRow, Auto size)
+	--     Panel (Absolute, Auto size, padding)
+	--       Label (intrinsic size)
+	local engine = LayoutEngine()
+
+	local root = new_node()
+	root.layout_box:setDimensions(800, 600)
+	root.layout_box.arrange = LayoutBox.Arrange.FlexCol
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Start) -- Don't stretch children
+
+	local row = root:add(new_node())
+	row.layout_box.arrange = LayoutBox.Arrange.FlexRow
+	row.layout_box:setWidthAuto()
+	row.layout_box:setHeightAuto()
+
+	local panel = row:add(new_node())
+	panel.layout_box:setWidthAuto()
+	panel.layout_box:setHeightAuto()
+	panel.layout_box:setPaddings({5, 20, 5, 20})
+
+	local label = panel:add(new_node_with_intrinsic_size(100, 20))
+	label.layout_box:setWidthAuto()
+	label.layout_box:setHeightAuto()
+
+	-- First layout: normal size
+	engine:updateLayout(root.children)
+	t:eq(label.layout_box.x.size, 100, "initial label width should be intrinsic")
+
+	-- Simulate resize to small width
+	root.layout_box:setWidth(1)
+	root.layout_box:markDirty(Axis.X)
+	row.layout_box:markDirty(Axis.X)
+	panel.layout_box:markDirty(Axis.X)
+	label.layout_box:markDirty(Axis.X)
+
+	engine:updateLayout(root.children)
+	-- Label should still have intrinsic width since parent has Auto mode
+	t:eq(label.layout_box.x.size, 100, "label width should still be intrinsic after shrink")
+
+	-- Simulate resize back to large width
+	root.layout_box:setWidth(1374)
+	root.layout_box:markDirty(Axis.X)
+	row.layout_box:markDirty(Axis.X)
+	panel.layout_box:markDirty(Axis.X)
+	label.layout_box:markDirty(Axis.X)
+
+	engine:updateLayout(root.children)
+	t:eq(label.layout_box.x.size, 100, "label width should be intrinsic after expand")
 end
 
 return test

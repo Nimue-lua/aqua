@@ -10,6 +10,7 @@ local JustifyContent = Enums.JustifyContent
 local AlignItems = Enums.AlignItems
 local math_clamp = math_util.clamp
 local math_max = math.max
+local math_min = math.min
 
 ---@class ui.FlexStrategy: ui.LayoutStrategy
 ---@operator call: ui.FlexStrategy
@@ -65,9 +66,35 @@ function FlexStrategy:measure(node, axis_idx)
 		local constraint = nil
 		if axis_idx == Axis.Y then
 			-- For Y axis, pass width as constraint (for text wrapping)
-			constraint = node.layout_box.x.size
+			-- Use the available width from parent if node's X is Auto/Fit (not yet constrained)
+			local x_axis = node.layout_box.x
+			if x_axis.mode == SizeMode.Auto or x_axis.mode == SizeMode.Fit then
+				-- Node's X is not fixed - use parent's content width as constraint
+				if node.parent then
+					local parent_x = node.parent.layout_box.x
+					constraint = parent_x.size - parent_x.padding_start - parent_x.padding_end - x_axis.margin_start - x_axis.margin_end
+				end
+			else
+				-- Node's X is fixed/percent - use its own size
+				constraint = x_axis.size
+			end
+		elseif axis_idx == Axis.X then
+			-- For X axis, constrain intrinsic width to parent's available width
+			-- Only constrain if parent has a Fixed/Percent size (independent of children)
+			-- If parent has Auto/Fit mode, its size depends on children, so don't constrain
+			if node.parent then
+				local parent_x = node.parent.layout_box.x
+				if parent_x.mode == SizeMode.Fixed or parent_x.mode == SizeMode.Percent then
+					local available = parent_x.size - parent_x.padding_start - parent_x.padding_end - axis.margin_start - axis.margin_end
+					local intrinsic_width = self:getIntrinsicSize(node, axis_idx, nil) or 0
+					-- Constrain to parent's available width (text should wrap, not overflow)
+					s = math_min(intrinsic_width, available)
+				end
+			end
 		end
-		s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
+		if s == 0 then
+			s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
+		end
 	else
 		if is_main_axis then
 			-- Main axis: sum of children + gaps
@@ -304,6 +331,7 @@ function FlexStrategy:distributeFlexShrink(children, shrink_space, axis_idx)
 
 		-- Distribute negative space proportionally by scaled weight
 		for _, child in ipairs(active_children) do
+			---@cast current_total_weight number LLS bug
 			local child_axis = self:getAxis(child, axis_idx)
 			local weight = child.layout_box.shrink * child_axis.size
 			local shrink_factor = weight / current_total_weight
