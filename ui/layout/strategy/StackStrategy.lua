@@ -48,14 +48,12 @@ function StackStrategy:measure(node, axis_idx)
 			-- For Y axis, pass width as constraint (for text wrapping)
 			local x_axis = node.layout_box.x
 			if x_axis.mode == SizeMode.Auto or x_axis.mode == SizeMode.Fit then
-				-- Node's X is not fixed - check parent for constraint
+				-- Node's X is not fixed - use parent's content width as constraint
+				-- The parent's size may have been set by grow/stretch phase
 				if node.parent then
 					local parent_x = node.parent.layout_box.x
-					if parent_x.mode == SizeMode.Fixed or parent_x.mode == SizeMode.Percent then
-						constraint = parent_x.size - parent_x.padding_start - parent_x.padding_end
-							- x_axis.margin_start - x_axis.margin_end
-					end
-					-- else: constraint = nil (infinite width, no wrap)
+					constraint = parent_x.size - parent_x.padding_start - parent_x.padding_end
+						- x_axis.margin_start - x_axis.margin_end
 				end
 			else
 				-- Node's X is fixed/percent - use its own size
