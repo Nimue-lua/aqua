@@ -40,9 +40,9 @@ function LayoutBox:new()
 	self.shrink = 1
 	self.child_gap = 0
 	self.reversed = false
-	self.arrange = Arrange.Absolute
+	self.arrange = Arrange.Stack
 	self.justify_content = JustifyContent.Start
-	self.align_items = AlignItems.Start
+	self.align_items = AlignItems.Stretch
 	self.axis_invalidated = Axis.None
 end
 

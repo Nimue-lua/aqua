@@ -13,6 +13,7 @@ Enums.Arrange = {
 	Absolute = 1,
 	FlexRow = 2,
 	FlexCol = 3,
+	Stack = 4,
 }
 
 ---@enum ui.Axis
@@ -29,6 +30,7 @@ Enums.JustifyContent = {
 	End = 2,
 	Center = 3,
 	SpaceBetween = 4,
+	Stretch = 5,
 }
 
 ---@enum ui.AlignItems

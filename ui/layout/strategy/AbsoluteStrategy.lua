@@ -1,4 +1,3 @@
-local table_util = require("table_util")
 local LayoutStrategy = require("ui.layout.strategy.LayoutStrategy")
 local Enums = require("ui.layout.Enums")
 local math_util = require("math_util")
@@ -11,9 +10,6 @@ local math_max = math.max
 ---@class ui.AbsoluteStrategy: ui.LayoutStrategy
 ---@operator call: ui.AbsoluteStrategy
 local AbsoluteStrategy = LayoutStrategy + {}
-
--- Reusable tables for GC optimization
-local growables = {} ---@type ui.Node[]
 
 ---@param node ui.Node
 ---@param axis_idx ui.Axis
@@ -37,7 +33,8 @@ function AbsoluteStrategy:measure(node, axis_idx)
 		return
 	end
 
-	-- Auto/Fit: calculate size from children or intrinsic size
+	-- Auto/Fit: For absolute containers, default to 0 or use intrinsic size
+	-- Absolute containers do NOT shrink-wrap around children dynamically
 	local s = 0.0
 
 	if #node.children == 0 then
@@ -45,34 +42,28 @@ function AbsoluteStrategy:measure(node, axis_idx)
 		local constraint = nil
 		if axis_idx == Axis.Y then
 			-- For Y axis, pass width as constraint (for text wrapping)
-			constraint = node.layout_box.x.size
+			local x_axis = node.layout_box.x
+			if x_axis.mode == SizeMode.Auto or x_axis.mode == SizeMode.Fit then
+				-- Node's X is not fixed - check parent for constraint
+				if node.parent then
+					local parent_x = node.parent.layout_box.x
+					if parent_x.mode == SizeMode.Fixed or parent_x.mode == SizeMode.Percent then
+						constraint = parent_x.size - parent_x.padding_start - parent_x.padding_end
+							- x_axis.margin_start - x_axis.margin_end
+					end
+					-- else: constraint = nil (infinite width, no wrap)
+				end
+			else
+				-- Node's X is fixed/percent - use its own size
+				constraint = x_axis.size
+			end
 		end
 		s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
 	else
-		-- First pass: measure non-Percent children to establish base size
+		-- For containers with children, measure children but don't calculate size from them
+		-- Absolute containers have explicit sizes or default to 0
 		for _, child in ipairs(node.children) do
-			local child_axis = self:getAxis(child, axis_idx)
-			if child_axis.mode ~= SizeMode.Percent then
-				self.engine:measure(child, axis_idx)
-				-- Use user-configured left/top, not pos (which is set during arrange)
-				local offset = (axis_idx == Axis.X) and child.layout_box.left or child.layout_box.top
-				s = math_max(s, offset + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
-			end
-		end
-
-		-- Set preliminary size for Percent children to reference
-		local base_size = axis.padding_start + s + axis.padding_end
-		axis.size = math_clamp(base_size, min_s, max_s)
-
-		-- Second pass: measure Percent children using the preliminary size
-		for _, child in ipairs(node.children) do
-			local child_axis = self:getAxis(child, axis_idx)
-			if child_axis.mode == SizeMode.Percent then
-				self.engine:measure(child, axis_idx)
-				-- Use user-configured left/top, not pos (which is set during arrange)
-				local offset = (axis_idx == Axis.X) and child.layout_box.left or child.layout_box.top
-				s = math_max(s, offset + child_axis.size + child_axis:getTotalMargin()) ---@type number LLS bug
-			end
+			self.engine:measure(child, axis_idx)
 		end
 	end
 
@@ -80,55 +71,25 @@ function AbsoluteStrategy:measure(node, axis_idx)
 	axis.size = math_clamp(s, min_s, max_s)
 end
 
----Distribute extra space to growing children
+---Absolute items do not "grow" to fill available space
 ---@param node ui.Node
 ---@param axis_idx ui.Axis
 function AbsoluteStrategy:grow(node, axis_idx)
-	if #node.children == 0 then
-		return
-	end
-
-	local axis = self:getAxis(node, axis_idx)
-	local available_space = axis:getLayoutSize()
-
-	table_util.clear(growables)
-
-	for _, child in ipairs(node.children) do
-		local child_axis = self:getAxis(child, axis_idx)
-
-		-- Handle percent sizing
-		if child_axis.mode == SizeMode.Percent then
-			local parent_size = axis:getLayoutSize()
-			local s = child_axis.preferred_size * parent_size
-			child_axis.size = math_clamp(s, child_axis.min_size, child_axis.max_size)
-		end
-
-		-- Collect growable children
-		if child.layout_box.grow > 0 and child_axis.mode == SizeMode.Auto then
-			table.insert(growables, child)
-		end
-	end
-
-	-- Distribute space to growable children
-	for _, child in ipairs(growables) do
-		local child_axis = self:getAxis(child, axis_idx)
-		local new_size = math_clamp(available_space, child_axis.min_size, child_axis.max_size)
-		child_axis.size = new_size
-	end
-
-	-- Recurse into children
+	-- Empty - absolute items do NOT grow to fill available space
+	-- Just recurse into children for their own grow phase
 	for _, child in ipairs(node.children) do
 		self.engine:grow(child, axis_idx)
 	end
 end
 
----Position all children (absolute positioning - children set their own positions)
+---Position all children using pure coordinate positioning
+---Ignores all alignments (justify_content, align_items)
 ---@param node ui.Node
 function AbsoluteStrategy:arrange(node)
 	for _, child in ipairs(node.children) do
 		local child_x = child.layout_box.x
 		local child_y = child.layout_box.y
-		-- Use left/top as configured position, compute pos with margins
+		-- Position is strictly: left/top + margin_start
 		child_x.pos = child.layout_box.left + child_x.margin_start
 		child_y.pos = child.layout_box.top + child_y.margin_start
 

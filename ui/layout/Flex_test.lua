@@ -737,4 +737,79 @@ function test.gap_with_percent_children(t)
 	t:eq(root.layout_box.x.size, 170, "container width with gap and percent child")
 end
 
+-------------------------------------------------------------------------------
+-- Nested Flex Container Tests
+-------------------------------------------------------------------------------
+
+---@param t testing.T
+function test.nested_flex_col_stretch_propagation(t)
+	-- This test verifies that stretch propagates through nested flex containers
+	-- With the new default align_items=Stretch, children should stretch automatically
+	
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexCol)
+	-- align_items defaults to Stretch now
+
+	-- c1: flex_col (align_items defaults to Stretch)
+	local c1 = root:add(new_node())
+	c1.layout_box:setArrange(LayoutBox.Arrange.FlexCol)
+	c1.layout_box:setHeight(50)
+
+	-- c2: flex_row (align_items defaults to Stretch)
+	local c2 = c1:add(new_node())
+	c2.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	c2.layout_box:setHeight(30)
+
+	-- label: fixed size (simulating intrinsic size)
+	local label = c2:add(new_node())
+	label.layout_box:setDimensions(100, 20)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	-- With default Stretch, all containers should stretch to parent width
+	t:eq(c1.layout_box.x.size, 200, "c1 stretches to root width")
+	t:eq(c2.layout_box.x.size, 200, "c2 stretches to c1 width (default Stretch)")
+	
+	-- Now simulate window resize
+	root.layout_box:setWidth(300)
+	engine:updateLayout(root.children)
+	
+	t:eq(c1.layout_box.x.size, 300, "c1 stretches to new root width")
+	t:eq(c2.layout_box.x.size, 300, "c2 stretches to new c1 width")
+end
+
+---@param t testing.T
+function test.nested_flex_col_with_align_items_start(t)
+	-- Test that explicitly setting align_items=Start prevents stretching
+	local root = new_node()
+	root.layout_box:setWidth(200)
+	root.layout_box:setHeight(100)
+	root.layout_box:setArrange(LayoutBox.Arrange.FlexCol)
+	root.layout_box:setAlignItems(LayoutBox.AlignItems.Start) -- Explicitly don't stretch
+
+	-- c1: flex_col with Start (children won't stretch)
+	local c1 = root:add(new_node())
+	c1.layout_box:setArrange(LayoutBox.Arrange.FlexCol)
+	c1.layout_box:setAlignItems(LayoutBox.AlignItems.Start)
+	c1.layout_box:setHeight(50)
+
+	-- c2: flex_row
+	local c2 = c1:add(new_node())
+	c2.layout_box:setArrange(LayoutBox.Arrange.FlexRow)
+	c2.layout_box:setHeight(30)
+
+	-- label
+	local label = c2:add(new_node())
+	label.layout_box:setDimensions(100, 20)
+
+	local engine = LayoutEngine(root)
+	engine:updateLayout(root.children)
+
+	t:eq(c1.layout_box.x.size, 100, "c1 uses intrinsic size (not stretched)")
+	t:eq(c2.layout_box.x.size, 100, "c2 uses intrinsic size (not stretched)")
+end
+
 return test
