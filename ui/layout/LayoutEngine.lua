@@ -3,6 +3,9 @@ local Enums = require("ui.layout.Enums")
 
 local Axis = Enums.Axis
 local Arrange = Enums.Arrange
+local SizeMode = Enums.SizeMode
+local AlignItems = Enums.AlignItems
+local JustifyContent = Enums.JustifyContent
 
 local AbsoluteStrategy = require("ui.layout.strategy.AbsoluteStrategy")
 local FlexStrategy = require("ui.layout.strategy.FlexStrategy")
@@ -22,14 +25,71 @@ function LayoutEngine:new()
 end
 
 ---@param node ui.Node
+---@return ui.Node
+local function findStableRoot(node)
+	local root = node
+
+	while root.parent do
+		local parent = root.parent
+		---@cast parent ui.Node
+		local lb = root.layout_box
+		local parent_lb = parent.layout_box
+
+		local depends = false
+
+		-- 1. Bottom-Up Dependency: Does the parent's size depend on this child?
+		if parent_lb.x.mode == SizeMode.Auto or parent_lb.x.mode == SizeMode.Fit or
+			parent_lb.y.mode == SizeMode.Auto or parent_lb.y.mode == SizeMode.Fit then
+			depends = true
+		end
+
+		-- 2. Top-Down Dependency: Does this child's size depend on the parent?
+		if not depends then
+			-- Percent sizing explicitly relies on the parent's layout size
+			if lb.x.mode == SizeMode.Percent or lb.y.mode == SizeMode.Percent then
+				depends = true
+			elseif parent_lb.arrange == Arrange.FlexRow or parent_lb.arrange == Arrange.FlexCol then
+				if lb.grow > 0 or lb.shrink > 0 then
+					depends = true
+				else
+					-- Cross-axis stretch check
+					local is_row = parent_lb.arrange == Arrange.FlexRow
+					local cross_axis = is_row and lb.y or lb.x
+					if cross_axis.mode == SizeMode.Auto or cross_axis.mode == SizeMode.Fit then
+						local align = lb.align_self or parent_lb.align_items
+						if align == AlignItems.Stretch then
+							depends = true
+						end
+					end
+				end
+			elseif parent_lb.arrange == Arrange.Stack then
+				if (lb.x.mode == SizeMode.Auto or lb.x.mode == SizeMode.Fit) and parent_lb.align_items == AlignItems.Stretch then
+					depends = true
+				elseif (lb.y.mode == SizeMode.Auto or lb.y.mode == SizeMode.Fit) and parent_lb.justify_content == JustifyContent.Stretch then
+					depends = true
+				end
+			end
+		end
+
+		if not depends then
+			break
+		end
+
+		root = parent
+	end
+
+	return root
+end
+
+---@param node ui.Node
 ---@return ui.LayoutStrategy
 function LayoutEngine:getStrategy(node)
 	local arrange = node.layout_box.arrange
 
-	if arrange == Arrange.Absolute then
-		return self.absolute_strategy
-	elseif arrange == Arrange.FlexRow or arrange == Arrange.FlexCol then
+	if arrange == Arrange.FlexRow or arrange == Arrange.FlexCol then
 		return self.flex_strategy
+	elseif arrange == Arrange.Absolute then
+		return self.absolute_strategy
 	elseif arrange == Arrange.Stack then
 		return self.stack_strategy
 	end
@@ -48,9 +108,9 @@ function LayoutEngine:updateLayout(dirty_nodes)
 	---@type {[ui.Node]: boolean}
 	local layout_roots = {}
 
-	-- Collect unique layout roots (parents of dirty nodes, or the dirty node itself if it has no parent)
+	-- Collect unique layout roots
 	for _, node in ipairs(dirty_nodes) do
-		local root = node.parent or node
+		local root = findStableRoot(node)
 		layout_roots[root] = true
 	end
 

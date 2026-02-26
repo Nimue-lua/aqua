@@ -69,7 +69,7 @@ function StackStrategy:measure(node, axis_idx)
 						- axis.margin_start - axis.margin_end
 					local intrinsic_width = self:getIntrinsicSize(node, axis_idx, nil) or 0
 					-- Constrain to parent's available width (text should wrap, not overflow)
-					s = math.min(intrinsic_width, available)
+					s = math_min(intrinsic_width, available)
 				end
 			end
 		end
