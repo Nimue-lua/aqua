@@ -2,9 +2,7 @@ local class = require("class")
 local Enums = require("ui.layout.Enums")
 
 local Axis = Enums.Axis
-local SizeMode = Enums.SizeMode
 local Arrange = Enums.Arrange
-local bit_band = bit.band
 
 local AbsoluteStrategy = require("ui.layout.strategy.AbsoluteStrategy")
 local FlexStrategy = require("ui.layout.strategy.FlexStrategy")
@@ -50,10 +48,14 @@ function LayoutEngine:updateLayout(dirty_nodes)
 	---@type {[ui.Node]: boolean}
 	local layout_roots = {}
 
-	for _, v in ipairs(dirty_nodes) do
-		local node = self:findLayoutBoundary(v, v.layout_box.axis_invalidated)
-		layout_roots[node] = true
+	-- Collect unique layout roots (parents of dirty nodes, or the dirty node itself if it has no parent)
+	for _, node in ipairs(dirty_nodes) do
+		local root = node.parent or node
+		layout_roots[root] = true
+	end
 
+	-- If root is a node with no parent, use it as the only layout root
+	for node, _ in pairs(layout_roots) do
 		if not node.parent then
 			layout_roots = {}
 			layout_roots[node] = true
@@ -62,8 +64,6 @@ function LayoutEngine:updateLayout(dirty_nodes)
 	end
 
 	for node, _ in pairs(layout_roots) do
-		-- Always measure both axes for layout roots
-		-- They may have been found via findLayoutBoundary even if not explicitly dirty
 		self:measure(node, Axis.X)
 		self:grow(node, Axis.X)
 
@@ -73,48 +73,10 @@ function LayoutEngine:updateLayout(dirty_nodes)
 		local target = node.parent and node.parent or node
 		self:arrange(target)
 
-		-- Mark the entire subtree as valid after layout completes
 		self:markValid(node)
 	end
 
 	return layout_roots
-end
-
----Find a node that can handle relayout
----@param node ui.Node
----@param axis ui.Axis
-function LayoutEngine:findLayoutBoundary(node, axis)
-	if not node.parent then
-		return node
-	end
-
-	if self:isStableBoundary(node.parent.layout_box, axis) then
-		return node.parent
-	end
-
-	return self:findLayoutBoundary(node.parent, axis)
-end
-
----Determine if a node has fixed dimensions for the requested axis
----@param layout_box ui.LayoutBox
----@param axis ui.Axis
----@return boolean
-function LayoutEngine:isStableBoundary(layout_box, axis)
-	if bit_band(layout_box.axis_invalidated, axis) ~= 0 then
-		return true
-	end
-
-	local x_stable = layout_box.x.mode == SizeMode.Fixed or layout_box.x.mode == SizeMode.Percent
-	local y_stable = layout_box.y.mode == SizeMode.Fixed or layout_box.y.mode == SizeMode.Percent
-
-	if bit_band(axis, Axis.X) ~= 0 and not x_stable then
-		return false
-	end
-	if bit_band(axis, Axis.Y) ~= 0 and not y_stable then
-		return false
-	end
-
-	return true
 end
 
 ---@param node ui.Node
