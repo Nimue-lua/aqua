@@ -14,6 +14,8 @@ Enums.Arrange = {
 	FlexRow = 2,
 	FlexCol = 3,
 	Stack = 4,
+	WrapRow = 5,
+	WrapCol = 6,
 }
 
 ---@enum ui.Axis

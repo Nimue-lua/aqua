@@ -9,6 +9,7 @@ local Enums = require("ui.layout.Enums")
 ---@field grow number
 ---@field shrink number
 ---@field child_gap number
+---@field line_gap number
 ---@field arrange ui.Arrange
 ---@field justify_content ui.JustifyContent
 ---@field align_items ui.AlignItems
@@ -39,6 +40,7 @@ function LayoutBox:new()
 	self.grow = 0
 	self.shrink = 1
 	self.child_gap = 0
+	self.line_gap = 0
 	self.reversed = false
 	self.arrange = Arrange.Stack
 	self.justify_content = JustifyContent.Start
@@ -242,6 +244,12 @@ end
 ---@param gap number
 function LayoutBox:setChildGap(gap)
 	self.child_gap = gap
+	self:markDirty(Axis.Both)
+end
+
+---@param gap number
+function LayoutBox:setLineGap(gap)
+	self.line_gap = gap
 	self:markDirty(Axis.Both)
 end
 

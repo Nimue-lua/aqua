@@ -10,18 +10,21 @@ local JustifyContent = Enums.JustifyContent
 local AbsoluteStrategy = require("ui.layout.strategy.AbsoluteStrategy")
 local FlexStrategy = require("ui.layout.strategy.FlexStrategy")
 local StackStrategy = require("ui.layout.strategy.StackStrategy")
+local WrapStrategy = require("ui.layout.strategy.WrapStrategy")
 
 ---@class ui.LayoutEngine
 ---@operator call: ui.LayoutEngine
 ---@field absolute_strategy ui.AbsoluteStrategy
 ---@field flex_strategy ui.FlexStrategy
 ---@field stack_strategy ui.StackStrategy
+---@field wrap_strategy ui.WrapStrategy
 local LayoutEngine = class()
 
 function LayoutEngine:new()
 	self.absolute_strategy = AbsoluteStrategy(self)
 	self.flex_strategy = FlexStrategy(self)
 	self.stack_strategy = StackStrategy(self)
+	self.wrap_strategy = WrapStrategy(self)
 end
 
 ---@param node ui.Node
@@ -62,6 +65,12 @@ local function findStableRoot(node)
 						end
 					end
 				end
+			elseif parent_lb.arrange == Arrange.WrapRow or parent_lb.arrange == Arrange.WrapCol then
+				if lb.x.mode == SizeMode.Auto or lb.x.mode == SizeMode.Fit then
+					depends = true
+				elseif lb.y.mode == SizeMode.Auto or lb.y.mode == SizeMode.Fit then
+					depends = true
+				end
 			elseif parent_lb.arrange == Arrange.Stack then
 				if (lb.x.mode == SizeMode.Auto or lb.x.mode == SizeMode.Fit) and parent_lb.align_items == AlignItems.Stretch then
 					depends = true
@@ -88,6 +97,8 @@ function LayoutEngine:getStrategy(node)
 
 	if arrange == Arrange.FlexRow or arrange == Arrange.FlexCol then
 		return self.flex_strategy
+	elseif arrange == Arrange.WrapRow or arrange == Arrange.WrapCol then
+		return self.wrap_strategy
 	elseif arrange == Arrange.Absolute then
 		return self.absolute_strategy
 	elseif arrange == Arrange.Stack then
