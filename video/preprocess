@@ -1,6 +1,6 @@
 #!/bin/luajit
 
-local p = assert(io.popen("gcc -E ffmpeg.c"))
+local p = assert(io.popen("gcc -std=c99 -E ffmpeg.c"))
 local out = assert(io.open("headers.lua", "w"))
 
 out:write("return [[\n")

@@ -80,7 +80,7 @@ int64_t fileSeek(void *ptr, int64_t pos, int whence) {
 
 void _Video_close(Video *video) {
 	if (video->formatContext) avformat_close_input(&video->formatContext);
-	if (video->codecContext) avcodec_close(video->codecContext);
+	if (video->codecContext) avcodec_free_context(&video->codecContext);
 	if (video->ioContext && video->ioContext->buffer) av_free(video->ioContext->buffer);
 	if (video->ioContext) avio_context_free(&video->ioContext);
 	if (video->frame) av_free(video->frame);

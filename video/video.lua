@@ -62,15 +62,15 @@ video.open = function(ptr, size)
 	assert(self.streamIndex >= 0)
 	self.stream = self.formatContext[0].streams[self.streamIndex]
 
-	self.codecContext = avcodec.avcodec_alloc_context3(self.codec[0])
-	assert(self.codecContext ~= nil)
-	assert(avcodec.avcodec_open2(self.codecContext, self.codec[0], nil) == 0)
+	self.codecContext = ffi.new("AVCodecContext*[1]")
+	self.codecContext[0] = avcodec.avcodec_alloc_context3(self.codec[0])
+	assert(self.codecContext[0] ~= nil)
+	ffi.gc(self.codecContext, avcodec.avcodec_free_context)
 
-	avcodec.avcodec_parameters_to_context(self.codecContext, self.stream.codecpar)
+	assert(avcodec.avcodec_parameters_to_context(self.codecContext[0], self.stream.codecpar) >= 0)
+	assert(avcodec.avcodec_open2(self.codecContext[0], self.codec[0], nil) == 0)
 
-	ffi.gc(self.codecContext, avcodec.avcodec_close)
-
-	local codecContext = self.codecContext
+	local codecContext = self.codecContext[0]
 
 	self.frame = ffi.gc(avutil.av_frame_alloc(), avutil.av_free)
 	self.frameRGB = ffi.gc(avutil.av_frame_alloc(), avutil.av_free)
@@ -117,7 +117,7 @@ end
 function Video:close() end
 
 function Video:getDimensions()
-	local cctx = self.codecContext
+	local cctx = self.codecContext[0]
 	return tonumber(cctx.width), tonumber(cctx.height)
 end
 
@@ -150,16 +150,16 @@ local packet = ffi.new("AVPacket[1]")
 function Video:read(dst)
 	while avformat.av_read_frame(self.formatContext[0], packet) == 0 do
 		if packet[0].stream_index == self.streamIndex then
-			avcodec.avcodec_send_packet(self.codecContext, packet)
+			avcodec.avcodec_send_packet(self.codecContext[0], packet)
 			avcodec.av_packet_unref(packet)
 
-			if avcodec.avcodec_receive_frame(self.codecContext, self.frame) == 0 then
+			if avcodec.avcodec_receive_frame(self.codecContext[0], self.frame) == 0 then
 				swscale.sws_scale(
 					self.swsContext,
 					ffi.cast("const uint8_t * const *", self.frame.data),
 					self.frame.linesize,
 					0,
-					self.codecContext.height,
+					self.codecContext[0].height,
 					self.frameRGB.data,
 					self.frameRGB.linesize
 				)
@@ -191,7 +191,7 @@ function Video:seek(time)
 		ts,
 		flags
 	)
-	avcodec.avcodec_flush_buffers(self.codecContext);
+	avcodec.avcodec_flush_buffers(self.codecContext[0]);
 end
 
 return video
