@@ -44,6 +44,8 @@ function StackStrategy:measure(node, axis_idx)
 	if #node.children == 0 then
 		-- Leaf node: use intrinsic size if available
 		local constraint = nil
+		local constrained = false
+
 		if axis_idx == Axis.Y then
 			-- For Y axis, pass width as constraint (for text wrapping)
 			local x_axis = node.layout_box.x
@@ -70,10 +72,12 @@ function StackStrategy:measure(node, axis_idx)
 					local intrinsic_width = self:getIntrinsicSize(node, axis_idx, nil) or 0
 					-- Constrain to parent's available width (text should wrap, not overflow)
 					s = math_min(intrinsic_width, available)
+					constrained = true
 				end
 			end
 		end
-		if s == 0 then
+
+		if not constrained then
 			s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
 		end
 	else
@@ -139,10 +143,19 @@ function StackStrategy:grow(node, axis_idx)
 		end
 
 		-- Apply stretch if alignment is Stretch and child has Auto size
-		if (stretch_alignment == AlignItems.Stretch or stretch_alignment == JustifyContent.Stretch) 
-			and child_axis.mode == SizeMode.Auto then
-			local stretched_size = available_space - child_axis:getTotalMargin()
-			child_axis.size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
+		local stretched_size = available_space - child_axis:getTotalMargin()
+		if child_axis.mode == SizeMode.Auto then
+			if (stretch_alignment == AlignItems.Stretch or stretch_alignment == JustifyContent.Stretch) then
+				child_axis.size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
+			elseif child_axis.size > stretched_size and stretched_size > 0 then
+				-- Even if not stretching, constrain to available space to prevent overflow and ensure wrapping
+				child_axis.size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
+			end
+		elseif child_axis.mode == SizeMode.Fit then
+			if child_axis.size > stretched_size and stretched_size > 0 then
+				-- Constrain Fit mode if it overflows and we have positive space
+				child_axis.size = math_clamp(stretched_size, child_axis.min_size, child_axis.max_size)
+			end
 		end
 	end
 

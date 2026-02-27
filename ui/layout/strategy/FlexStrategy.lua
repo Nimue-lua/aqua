@@ -64,6 +64,8 @@ function FlexStrategy:measure(node, axis_idx)
 	if #node.children == 0 then
 		-- Leaf node: use intrinsic size if available
 		local constraint = nil
+		local constrained = false
+
 		if axis_idx == Axis.Y then
 			-- For Y axis, pass width as constraint (for text wrapping)
 			-- Use the available width from parent if node's X is Auto/Fit (not yet constrained)
@@ -89,10 +91,12 @@ function FlexStrategy:measure(node, axis_idx)
 					local intrinsic_width = self:getIntrinsicSize(node, axis_idx, nil) or 0
 					-- Constrain to parent's available width (text should wrap, not overflow)
 					s = math_min(intrinsic_width, available)
+					constrained = true
 				end
 			end
 		end
-		if s == 0 then
+
+		if not constrained then
 			s = self:getIntrinsicSize(node, axis_idx, constraint) or 0
 		end
 	else
@@ -206,10 +210,17 @@ function FlexStrategy:grow(node, axis_idx)
 				total_shrink = total_shrink + child.layout_box.shrink
 			end
 		else
-			-- Cross axis: stretch alignment
+			-- Cross axis: stretch alignment or constraint
 			local align = child.layout_box.align_self or layout_box.align_items
 			if align == AlignItems.Stretch and child_axis.mode == SizeMode.Auto then
 				table.insert(flex_items, child)
+			elseif (child_axis.mode == SizeMode.Auto or child_axis.mode == SizeMode.Fit) then
+				-- Even if not stretching, constrain to available space if it overflows.
+				-- This is important for wrapping content.
+				local available = available_space - child_axis:getTotalMargin()
+				if available > 0 and child_axis.size > available then
+					child_axis.size = math_clamp(available, child_axis.min_size, child_axis.max_size)
+				end
 			end
 		end
 	end
