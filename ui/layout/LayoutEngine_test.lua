@@ -714,6 +714,46 @@ function test.stack_end_alignment(t)
 end
 
 ---@param t testing.T
+function test.stack_align_self(t)
+	-- Test individual child alignment in Stack
+	local engine = LayoutEngine()
+	local container = new_node()
+	container.layout_box:setDimensions(200, 100)
+	container.layout_box.arrange = LayoutBox.Arrange.Stack
+	-- Parent defaults to Start
+	container.layout_box:setAlignItems(LayoutBox.AlignItems.Start)
+	container.layout_box:setJustifyContent(LayoutBox.JustifyContent.Start)
+
+	local c1 = container:add(new_node())
+	c1.layout_box:setDimensions(50, 30)
+	c1.layout_box:setAlignSelf(LayoutBox.AlignItems.End)
+	c1.layout_box:setJustifySelf(LayoutBox.JustifyContent.End)
+
+	local c2 = container:add(new_node())
+	c2.layout_box:setDimensions(50, 30)
+	c2.layout_box:setAlignSelf(LayoutBox.AlignItems.Center)
+	c2.layout_box:setJustifySelf(LayoutBox.JustifyContent.Center)
+
+	local c3 = container:add(new_node())
+	c3.layout_box:setDimensions(50, 30)
+	-- c3 should use parent defaults (Start, Start)
+
+	engine:updateLayout(container.children)
+
+	-- c1 (End, End)
+	t:eq(c1.layout_box.x.pos, 150, "c1 should be at end on X")
+	t:eq(c1.layout_box.y.pos, 70, "c1 should be at end on Y")
+
+	-- c2 (Center, Center)
+	t:eq(c2.layout_box.x.pos, 75, "c2 should be at center on X")
+	t:eq(c2.layout_box.y.pos, 35, "c2 should be at center on Y")
+
+	-- c3 (Default: Start, Start)
+	t:eq(c3.layout_box.x.pos, 0, "c3 should be at start on X")
+	t:eq(c3.layout_box.y.pos, 0, "c3 should be at start on Y")
+end
+
+---@param t testing.T
 function test.stack_with_padding(t)
 	-- Test Stack with padding
 	local engine = LayoutEngine()

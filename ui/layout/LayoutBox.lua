@@ -14,6 +14,7 @@ local Enums = require("ui.layout.Enums")
 ---@field justify_content ui.JustifyContent
 ---@field align_items ui.AlignItems
 ---@field align_self ui.AlignItems?
+---@field justify_self ui.JustifyContent?
 ---@field axis_invalidated ui.Axis
 local LayoutBox = class()
 
@@ -45,6 +46,8 @@ function LayoutBox:new()
 	self.arrange = Arrange.Stack
 	self.justify_content = JustifyContent.Start
 	self.align_items = AlignItems.Stretch
+	self.align_self = nil
+	self.justify_self = nil
 	self.axis_invalidated = Axis.None
 end
 
@@ -229,6 +232,15 @@ function LayoutBox:setAlignSelf(align)
 		return
 	end
 	self.align_self = align
+	self:markDirty(Axis.Both)
+end
+
+---@param justify ui.JustifyContent?
+function LayoutBox:setJustifySelf(justify)
+	if self.justify_self == justify then
+		return
+	end
+	self.justify_self = justify
 	self:markDirty(Axis.Both)
 end
 

@@ -121,16 +121,7 @@ function StackStrategy:grow(node, axis_idx)
 
 	local layout_box = node.layout_box
 	local axis = self:getAxis(node, axis_idx)
-	local available_space = axis:getLayoutSize()  -- Already excludes padding
-
-	-- Determine which alignment to use for this axis
-	-- align_items controls X-axis, justify_content controls Y-axis
-	local stretch_alignment
-	if axis_idx == Axis.X then
-		stretch_alignment = layout_box.align_items
-	else
-		stretch_alignment = layout_box.justify_content
-	end
+	local available_space = axis:getLayoutSize() -- Already excludes padding
 
 	for _, child in ipairs(node.children) do
 		local child_axis = self:getAxis(child, axis_idx)
@@ -140,6 +131,15 @@ function StackStrategy:grow(node, axis_idx)
 			local parent_size = axis:getLayoutSize()
 			local s = child_axis.preferred_size * parent_size
 			child_axis.size = math_clamp(s, child_axis.min_size, child_axis.max_size)
+		end
+
+		-- Determine which alignment to use for this axis
+		-- align_items controls X-axis, justify_content controls Y-axis
+		local stretch_alignment
+		if axis_idx == Axis.X then
+			stretch_alignment = child.layout_box.align_self or layout_box.align_items
+		else
+			stretch_alignment = child.layout_box.justify_self or layout_box.justify_content
 		end
 
 		-- Apply stretch if alignment is Stretch and child has Auto size
@@ -181,9 +181,9 @@ function StackStrategy:arrange(node)
 		local child_x = child.layout_box.x
 		local child_y = child.layout_box.y
 
-		-- X-axis position (controlled by align_items)
+		-- X-axis position (controlled by align_items / align_self)
 		local x_pos = self:calculatePosition(
-			layout_box.align_items,
+			child.layout_box.align_self or layout_box.align_items,
 			node_x.padding_start,
 			available_width,
 			child_x.size,
@@ -192,9 +192,9 @@ function StackStrategy:arrange(node)
 		)
 		child_x.pos = x_pos
 
-		-- Y-axis position (controlled by justify_content)
+		-- Y-axis position (controlled by justify_content / justify_self)
 		local y_pos = self:calculatePosition(
-			layout_box.justify_content,
+			child.layout_box.justify_self or layout_box.justify_content,
 			node_y.padding_start,
 			available_height,
 			child_y.size,

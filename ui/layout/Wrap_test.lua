@@ -107,7 +107,7 @@ end
 ---@param t testing.T
 function test.wrap_row_auto_size(t)
 	local engine = LayoutEngine()
-	
+
 	-- A wrapper to constrain the auto-size container
 	local wrapper = new_node()
 	wrapper.layout_box:setDimensions(110, 200)
@@ -138,7 +138,7 @@ end
 ---@param t testing.T
 function test.wrap_row_intrinsic_size(t)
 	local engine = LayoutEngine()
-	
+
 	local wrapper = new_node()
 	wrapper.layout_box:setDimensions(110, 200)
 	wrapper.layout_box:setAlignItems(Enums.AlignItems.Start)
@@ -194,7 +194,7 @@ end
 ---@param t testing.T
 function test.wrap_row_max_size(t)
 	local engine = LayoutEngine()
-	
+
 	local container = new_node()
 	container.layout_box:setWidthAuto()
 	container.layout_box:setHeightAuto()
