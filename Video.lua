@@ -34,24 +34,31 @@ function Video:release()
 end
 
 function Video:rewind()
-	local v = self.video
-	v:seek(0)
-	v:read(self.imageData:getPointer())
+	self:seek(0)
+end
+
+---@param time number
+function Video:seek(time)
+	self.video:seek(time)
+	self:play(time)
 end
 
 ---@param time number
 function Video:play(time)
 	local v = self.video
-	local read_count = 10
-	while time >= v:tell() and time < v:getDuration() do
-		v:read(self.imageData:getPointer())
-		read_count = read_count - 1
-		if read_count == 0 then
+	local read = false
+
+	while time > v:tell() and time < v:getDuration() do
+		if not v:read(self.imageData:getPointer()) then
 			break
 		end
+		read = true
 	end
-	---@diagnostic disable-next-line: missing-parameter
-	self.image:replacePixels(self.imageData)
+
+	if read then
+		---@diagnostic disable-next-line: missing-parameter
+		self.image:replacePixels(self.imageData)
+	end
 end
 
 return Video
