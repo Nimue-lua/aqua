@@ -24,6 +24,7 @@ end
 ---@class threadremote.ThreadRemote: icc.IPeer
 ---@operator call: threadremote.ThreadRemote
 local ThreadRemote = IPeer + {}
+
 ---@param id integer
 ---@param t table
 function ThreadRemote:new(id, t)
@@ -58,8 +59,10 @@ function ThreadRemote:new(id, t)
 	end
 end
 
----@param f fun(remote: table, ...: any): ...: any
+---@generic T
+---@param f fun(remote: table, ...: any): T
 ---@param ... any
+---@return T
 function ThreadRemote:start(f, ...)
 	self.thread:start()
 
@@ -68,6 +71,8 @@ function ThreadRemote:start(f, ...)
 		codestring = string.dump(f),
 		args = table_util.pack(...),
 	})
+
+	return self.remote
 end
 
 ---@param msg icc.Message

@@ -56,7 +56,16 @@ local function handle(event)
 		return
 	elseif event.name == "loadstring" then
 		local f = assert(loadstring(event.codestring))
-		remote_handler.t = f(remote, unpack(event.args, 1, event.args.n))
+
+		---@type boolean, any
+		local ok, err = xpcall(f, debug.traceback, remote, unpack(event.args, 1, event.args.n))
+		if not ok then
+			print("error in ThreadRemote init function", err)
+			running = false
+			return
+		end
+
+		remote_handler.t = err
 	elseif event.name == "message" then
 		---@type icc.Message
 		local msg = setmetatable(event.msg, Message)
