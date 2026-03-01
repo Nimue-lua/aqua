@@ -1,4 +1,5 @@
 local IFilesystem = require("fs.IFilesystem")
+local physfs = require("physfs")
 
 ---@class fs.LoveFilesystem: fs.IFilesystem
 ---@operator call: fs.LoveFilesystem
@@ -49,6 +50,22 @@ end
 ---@return boolean
 function LoveFilesystem:remove(name)
 	return love.filesystem.remove(name)
+end
+
+---@param newDir string
+---@param mountPoint string
+---@param appendToPath boolean?
+---@return boolean?
+---@return string?
+function LoveFilesystem:mount(newDir, mountPoint, appendToPath)
+	return physfs.mount(newDir, mountPoint, appendToPath)
+end
+
+---@param oldDir string
+---@return boolean?
+---@return string?
+function LoveFilesystem:unmount(oldDir)
+	return physfs.unmount(oldDir)
 end
 
 return LoveFilesystem
